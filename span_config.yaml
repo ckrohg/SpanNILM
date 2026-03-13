@@ -1,0 +1,33 @@
+# SPAN NILM Configuration
+span:
+  host: "192.168.1.100"        # SPAN panel IP address
+  token: ""                     # Bearer token (leave empty to use env var SPAN_TOKEN)
+  poll_interval_seconds: 1      # How often to sample circuit data
+  timeout_seconds: 5            # API request timeout
+
+storage:
+  data_dir: "./data"            # Where to store collected data
+  format: "parquet"             # parquet or csv
+  retention_days: 90            # How long to keep raw data
+
+detection:
+  # Minimum power change (watts) to register as an event
+  min_power_delta_w: 15
+  # Window size for smoothing (number of samples)
+  smoothing_window: 5
+  # Minimum duration (seconds) for a state to be considered stable
+  min_state_duration_s: 3
+  # Maximum gap (seconds) between on/off events to pair them
+  max_event_pair_gap_s: 7200
+
+classification:
+  # Minimum number of observations before classifying a device
+  min_observations: 10
+  # Similarity threshold for matching signatures (0-1)
+  match_threshold: 0.85
+  # Known device signatures file
+  signatures_file: "./device_signatures.yaml"
+
+logging:
+  level: "INFO"                 # DEBUG, INFO, WARNING, ERROR
+  file: "./span_nilm.log"

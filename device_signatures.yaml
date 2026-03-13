@@ -1,0 +1,169 @@
+# Known Device Signatures for NILM Classification
+# Each device has characteristic power levels, duty cycles, and state patterns.
+# These are starting templates - the system learns and refines from actual data.
+
+devices:
+  # --- HVAC ---
+  hvac_compressor:
+    category: "HVAC"
+    power_range_w: [1500, 5000]
+    typical_duration_range_s: [300, 7200]
+    duty_cycle_pattern: "cycling"  # On/off with regular intervals
+    signature:
+      startup_surge: true
+      surge_multiplier: 2.5  # Inrush current on startup
+      steady_state_variance: 0.05
+    notes: "AC compressor - high power, cycling pattern, inrush current"
+
+  hvac_fan:
+    category: "HVAC"
+    power_range_w: [100, 500]
+    typical_duration_range_s: [300, 14400]
+    duty_cycle_pattern: "sustained"
+    signature:
+      startup_surge: false
+      steady_state_variance: 0.03
+
+  heat_pump:
+    category: "HVAC"
+    power_range_w: [1000, 4000]
+    typical_duration_range_s: [600, 14400]
+    duty_cycle_pattern: "variable"
+    signature:
+      startup_surge: true
+      surge_multiplier: 2.0
+      steady_state_variance: 0.15
+    notes: "Variable speed - power level changes with demand"
+
+  # --- Kitchen ---
+  refrigerator:
+    category: "Kitchen"
+    power_range_w: [80, 250]
+    typical_duration_range_s: [300, 1800]
+    duty_cycle_pattern: "cycling"
+    signature:
+      startup_surge: true
+      surge_multiplier: 3.0
+      steady_state_variance: 0.05
+      cycle_period_range_s: [1200, 5400]
+    notes: "Very regular cycling pattern, compressor on/off"
+
+  microwave:
+    category: "Kitchen"
+    power_range_w: [800, 1500]
+    typical_duration_range_s: [15, 600]
+    duty_cycle_pattern: "sustained"
+    signature:
+      startup_surge: false
+      steady_state_variance: 0.02
+    notes: "Short duration, very stable power draw"
+
+  oven_element:
+    category: "Kitchen"
+    power_range_w: [2000, 5000]
+    typical_duration_range_s: [300, 7200]
+    duty_cycle_pattern: "cycling"
+    signature:
+      startup_surge: false
+      steady_state_variance: 0.02
+      cycle_period_range_s: [120, 600]
+    notes: "Thermostat-controlled cycling of heating element"
+
+  dishwasher:
+    category: "Kitchen"
+    power_range_w: [200, 2000]
+    typical_duration_range_s: [1800, 7200]
+    duty_cycle_pattern: "multi_phase"
+    signature:
+      startup_surge: false
+      steady_state_variance: 0.3
+      phases: ["wash_motor", "heat", "rinse", "dry"]
+    notes: "Multi-phase FSM: motor + heater cycling through program"
+
+  # --- Laundry ---
+  washer:
+    category: "Laundry"
+    power_range_w: [200, 500]
+    typical_duration_range_s: [1800, 5400]
+    duty_cycle_pattern: "multi_phase"
+    signature:
+      startup_surge: true
+      surge_multiplier: 2.0
+      steady_state_variance: 0.25
+      phases: ["fill", "wash", "drain", "spin"]
+
+  dryer_electric:
+    category: "Laundry"
+    power_range_w: [2000, 5500]
+    typical_duration_range_s: [1800, 5400]
+    duty_cycle_pattern: "cycling"
+    signature:
+      startup_surge: false
+      steady_state_variance: 0.1
+      cycle_period_range_s: [60, 300]
+    notes: "Heating element cycles, motor is constant"
+
+  # --- Water ---
+  water_heater:
+    category: "Water"
+    power_range_w: [3000, 5500]
+    typical_duration_range_s: [600, 3600]
+    duty_cycle_pattern: "sustained"
+    signature:
+      startup_surge: false
+      steady_state_variance: 0.02
+    notes: "Very stable high power draw, pure resistive load"
+
+  well_pump:
+    category: "Water"
+    power_range_w: [500, 2000]
+    typical_duration_range_s: [30, 600]
+    duty_cycle_pattern: "sustained"
+    signature:
+      startup_surge: true
+      surge_multiplier: 3.0
+      steady_state_variance: 0.05
+
+  # --- EV / Garage ---
+  ev_charger_l2:
+    category: "EV"
+    power_range_w: [3000, 11500]
+    typical_duration_range_s: [3600, 43200]
+    duty_cycle_pattern: "sustained"
+    signature:
+      startup_surge: false
+      steady_state_variance: 0.02
+    notes: "Very long duration, very stable power (EVSE controlled)"
+
+  garage_door:
+    category: "Garage"
+    power_range_w: [300, 600]
+    typical_duration_range_s: [10, 30]
+    duty_cycle_pattern: "sustained"
+    signature:
+      startup_surge: true
+      surge_multiplier: 2.0
+      steady_state_variance: 0.1
+    notes: "Very short, distinctive pattern"
+
+  # --- Lighting / Other ---
+  pool_pump:
+    category: "Pool"
+    power_range_w: [500, 2500]
+    typical_duration_range_s: [3600, 28800]
+    duty_cycle_pattern: "sustained"
+    signature:
+      startup_surge: true
+      surge_multiplier: 2.5
+      steady_state_variance: 0.03
+    notes: "Long runs on a daily schedule"
+
+  space_heater:
+    category: "Heating"
+    power_range_w: [750, 1500]
+    typical_duration_range_s: [300, 14400]
+    duty_cycle_pattern: "cycling"
+    signature:
+      startup_surge: false
+      steady_state_variance: 0.02
+      cycle_period_range_s: [120, 600]

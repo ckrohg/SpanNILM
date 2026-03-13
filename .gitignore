@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Data
+data/
+*.parquet
+*.csv
+!device_signatures.yaml
+
+# Models
+models/*.pkl
+
+# Env
+.env
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
