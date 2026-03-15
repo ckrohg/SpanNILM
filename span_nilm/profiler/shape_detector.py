@@ -437,53 +437,115 @@ class ShapeDetector:
         is_cycling: bool,
         circuit_name: str,
     ) -> str:
-        """Infer a descriptive device name from shape characteristics."""
-        # Brief high-power events
-        if avg_duration < 5 and peak_power > 200:
-            return "Brief motor/actuator"
+        """Infer a descriptive device name from shape + circuit context.
 
-        # Cycling with moderate power = HVAC component or pump
+        Uses circuit name keywords, power characteristics, temporal patterns,
+        and shape features to produce the best possible device name.
+        """
+        name_lower = circuit_name.lower()
+
+        # --- Circuit-context-aware naming ---
+
+        # Hydronic/pump circuits
+        if any(kw in name_lower for kw in ("hydronic", "zone pump", "glycol")):
+            if avg_power < 50:
+                return "Hydronic controller"
+            elif avg_power < 200:
+                return "Circulation pump"
+            else:
+                n_pumps = max(1, round(avg_power / 150))
+                return f"Zone pump{'s' if n_pumps > 1 else ''} ({n_pumps}x)"
+
+        # Garage door
+        if "garage" in name_lower:
+            if avg_duration < 3 and avg_power > 200:
+                return "Garage door motor"
+            elif avg_power < 50:
+                return "Garage standby"
+            elif avg_power < 200:
+                return "Garage light/outlet"
+            return "Garage equipment"
+
+        # Lighting circuits
+        if any(kw in name_lower for kw in ("light", "outlet")):
+            if avg_power < 30:
+                return "Standby/phantom load"
+            elif avg_power < 100:
+                return "LED lighting"
+            elif avg_power < 300:
+                return "Lighting + small appliance"
+            elif avg_power < 800:
+                return "Outlet appliance"
+            return "High-power outlet load"
+
+        # Sub-panel circuits — use shape characteristics
+        location = ""
+        for loc in ("barn", "basement", "2nd floor", "upstairs"):
+            if loc in name_lower:
+                location = loc.title() + " "
+                break
+
+        # --- Shape-based naming (when circuit name isn't specific) ---
+
+        # Brief events
+        if avg_duration < 5:
+            if avg_power > 3000:
+                return f"{location}High-power burst"
+            elif avg_power > 500:
+                return f"{location}Motor/compressor start"
+            return f"{location}Brief load ({avg_power:.0f}W)"
+
+        # Cycling devices
         if is_cycling:
-            if avg_power < 100:
-                return "Cycling standby load"
-            elif avg_power < 500:
-                return "Cycling pump/fan"
-            else:
-                return "Cycling high-power load"
+            if avg_power < 50:
+                return f"{location}Cycling controller"
+            elif avg_power < 300:
+                return f"{location}Cycling fan/pump"
+            elif avg_power < 1500:
+                return f"{location}Cycling compressor"
+            return f"{location}Cycling heavy load"
 
-        # Multi-phase = complex appliance
+        # Multi-phase = complex appliance cycle
         if num_phases >= 4:
-            if avg_power > 1000:
-                return "Multi-phase appliance (high power)"
-            return "Multi-phase appliance"
+            if avg_power > 2000:
+                return f"{location}Multi-stage heating"
+            elif avg_power > 500:
+                return f"{location}Multi-stage appliance"
+            return f"{location}Variable load"
 
-        # Startup surge = motor load
+        # Startup surge = motor
         if has_surge:
-            if avg_power < 500:
-                return "Motor load (small)"
+            if avg_power < 300:
+                return f"{location}Small motor"
+            elif avg_power < 1500:
+                return f"{location}Motor load"
+            return f"{location}Large motor"
+
+        # Sustained loads — describe by power level and duration
+        if avg_duration > 120:  # > 2 hours
+            if avg_power < 100:
+                return f"{location}Baseload"
+            elif avg_power < 500:
+                return f"{location}Continuous load ({avg_power:.0f}W)"
             elif avg_power < 2000:
-                return "Motor load (medium)"
-            else:
-                return "Motor load (large)"
+                return f"{location}Heating/cooling ({avg_power:.0f}W)"
+            return f"{location}Heavy continuous ({avg_power:.0f}W)"
 
-        # Sustained steady load
-        if avg_duration > 60:
-            if avg_power < 200:
-                return "Sustained low load"
-            elif avg_power < 1000:
-                return "Sustained medium load"
-            else:
-                return "Sustained high load"
+        if avg_duration > 20:  # 20 min - 2 hours
+            if avg_power < 100:
+                return f"{location}Intermittent low load"
+            elif avg_power < 500:
+                return f"{location}Medium appliance ({avg_power:.0f}W)"
+            elif avg_power < 2000:
+                return f"{location}Large appliance ({avg_power:.0f}W)"
+            return f"{location}High-power load ({avg_power:.0f}W)"
 
-        # Generic by power level
-        if avg_power < 100:
-            return "Small load"
-        elif avg_power < 500:
-            return "Medium load"
-        elif avg_power < 2000:
-            return "Large load"
-        else:
-            return "Very large load"
+        # Short sessions (5-20 min)
+        if avg_power < 200:
+            return f"{location}Brief low load"
+        elif avg_power < 1000:
+            return f"{location}Short-cycle load ({avg_power:.0f}W)"
+        return f"{location}Short heavy load ({avg_power:.0f}W)"
 
     def _single_device_fallback(
         self, sessions: list[Session], circuit_name: str,
