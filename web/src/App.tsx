@@ -1,14 +1,11 @@
 import { useState } from 'react'
 import { useDashboard } from './hooks/useDashboard'
-import { useAnalysis } from './hooks/useAnalysis'
 import PowerNow from './components/PowerNow'
 import StackedTimeline from './components/StackedTimeline'
 import EnergySummary from './components/EnergySummary'
 import AlwaysOnCard from './components/AlwaysOnCard'
 import BillProjectionCard from './components/BillProjection'
 import UsageTrends from './components/UsageTrends'
-import DeviceCard from './components/DeviceCard'
-import ActivityFeed from './components/ActivityFeed'
 import Circuits from './pages/Circuits'
 import CircuitDetail from './pages/CircuitDetail'
 import DeviceDetail from './pages/DeviceDetail'
@@ -48,7 +45,7 @@ export default function App() {
   const [selectedCircuit, setSelectedCircuit] = useState<string | null>(null)
   const [selectedDevice, setSelectedDevice] = useState<{ equipmentId: string; clusterId: number } | null>(null)
   const { data: dashboard, loading, error, refresh } = useDashboard()
-  const { data: analysis } = useAnalysis(24)
+
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -204,39 +201,6 @@ export default function App() {
                   />
                 </section>
 
-                {/* Detected devices and activity feed (from analysis) */}
-                {analysis && (analysis.devices.length > 0 || analysis.events.length > 0) && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {analysis.devices.length > 0 && (
-                      <section>
-                        <h2 className="text-sm font-medium text-gray-400 mb-3">
-                          Detected Devices ({analysis.devices.length})
-                        </h2>
-                        <div className="space-y-3">
-                          {analysis.devices
-                            .sort((a, b) => {
-                              if (a.is_on !== b.is_on) return a.is_on ? -1 : 1
-                              return b.mean_power_w - a.mean_power_w
-                            })
-                            .map((device) => (
-                              <DeviceCard key={`${device.circuit_id}-${device.cluster_id}`} device={device} />
-                            ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {analysis.events.length > 0 && (
-                      <section>
-                        <h2 className="text-sm font-medium text-gray-400 mb-3">
-                          Recent Activity
-                        </h2>
-                        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-2">
-                          <ActivityFeed events={analysis.events} />
-                        </div>
-                      </section>
-                    )}
-                  </div>
-                )}
               </>
             )}
           </>
