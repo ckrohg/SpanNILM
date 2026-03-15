@@ -230,14 +230,52 @@ class TemporalAnalyzer:
         return sessions
 
     def _find_session_levels(self, power: np.ndarray) -> list[float]:
-        """Find distinct power levels within a single session."""
+        """Find distinct power levels within a single session using 1D clustering.
+
+        Groups consecutive readings at similar power levels into phases,
+        then returns the distinct mean power of each phase.
+        """
         if len(power) < 3:
             return [round(float(np.mean(power)), 0)]
 
-        # Simple approach: cluster by rounding to nearest 50W
-        rounded = np.round(power / 50) * 50
-        unique_levels = np.unique(rounded)
-        return [float(l) for l in unique_levels if l > 0]
+        # 1D clustering: walk through readings, group consecutive similar values
+        # A new phase starts when power changes by more than threshold
+        threshold = max(30, np.mean(power) * 0.15)  # 15% of mean or 30W minimum
+        phases: list[list[float]] = [[float(power[0])]]
+
+        for i in range(1, len(power)):
+            current_phase_mean = np.mean(phases[-1])
+            if abs(float(power[i]) - current_phase_mean) > threshold:
+                # Start a new phase (only if current phase has enough readings)
+                if len(phases[-1]) >= 2:
+                    phases.append([float(power[i])])
+                else:
+                    # Single-reading phase, extend it
+                    phases[-1].append(float(power[i]))
+            else:
+                phases[-1].append(float(power[i]))
+
+        # Compute mean of each phase, deduplicate similar levels
+        phase_means = [round(float(np.mean(p)), 0) for p in phases if len(p) >= 2]
+        if not phase_means:
+            phase_means = [round(float(np.mean(power)), 0)]
+
+        # Merge phases that are within threshold of each other
+        unique_levels = []
+        for level in phase_means:
+            if level <= 0:
+                continue
+            merged = False
+            for j, existing in enumerate(unique_levels):
+                if abs(level - existing) < threshold:
+                    # Weighted merge
+                    unique_levels[j] = round((existing + level) / 2, 0)
+                    merged = True
+                    break
+            if not merged:
+                unique_levels.append(level)
+
+        return sorted(unique_levels) if unique_levels else [round(float(np.mean(power)), 0)]
 
     def _detect_cycling(
         self, sessions: list[UsageSession], timestamps: pd.Series

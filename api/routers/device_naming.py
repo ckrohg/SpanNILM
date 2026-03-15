@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import time
 
 import anthropic
 import psycopg2
@@ -92,17 +93,8 @@ class DeviceNameUpdate(BaseModel):
     name: str
 
 
-@router.post(
-    "/devices/{equipment_id}/{cluster_id}/suggest",
-    response_model=DeviceSuggestResponse,
-)
-def suggest_device_names(equipment_id: str, cluster_id: int):
-    """Use Claude to suggest device names based on power characteristics."""
-    template = _load_device_template(equipment_id, cluster_id)
-    if not template:
-        raise HTTPException(404, f"No device template found for {equipment_id} cluster {cluster_id}")
-
-    # Build the prompt with all available context
+def _build_suggest_prompt(template: dict) -> str:
+    """Build the Claude prompt for device name suggestion from a device template."""
     circuit_name = template.get("circuit_name", "Unknown")
     avg_power = template.get("avg_power_w", 0)
     peak_power = template.get("peak_power_w", 0)
@@ -128,7 +120,7 @@ def suggest_device_names(equipment_id: str, cluster_id: int):
 
     curve_str = ", ".join(f"{v:.3f}" for v in template_curve) if template_curve else "N/A"
 
-    prompt = f"""You are analyzing power consumption data from a residential electrical circuit to identify what device is producing this pattern.
+    return f"""You are analyzing power consumption data from a residential electrical circuit to identify what device is producing this pattern.
 
 Circuit: {circuit_name}
 Average power: {avg_power}W
@@ -156,6 +148,29 @@ Based on this data, suggest 2-3 specific device names that could produce this pa
 Return ONLY a JSON array of objects with "name" and "reasoning" fields. Be specific (e.g., "Mitsubishi Mini-Split Compressor" not just "HVAC"). Example:
 [{{"name": "Electric Baseboard Heater", "reasoning": "Steady 1.3kW draw with long sessions matches resistive heating element"}}]"""
 
+
+def _parse_claude_suggestions(response_text: str) -> list[dict]:
+    """Parse Claude's response text into a list of suggestion dicts."""
+    text = response_text.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        lines = [l for l in lines if not l.startswith("```")]
+        text = "\n".join(lines)
+    return json.loads(text)
+
+
+@router.post(
+    "/devices/{equipment_id}/{cluster_id}/suggest",
+    response_model=DeviceSuggestResponse,
+)
+def suggest_device_names(equipment_id: str, cluster_id: int):
+    """Use Claude to suggest device names based on power characteristics."""
+    template = _load_device_template(equipment_id, cluster_id)
+    if not template:
+        raise HTTPException(404, f"No device template found for {equipment_id} cluster {cluster_id}")
+
+    prompt = _build_suggest_prompt(template)
+
     try:
         client = anthropic.Anthropic()
         message = client.messages.create(
@@ -164,16 +179,7 @@ Return ONLY a JSON array of objects with "name" and "reasoning" fields. Be speci
             messages=[{"role": "user", "content": prompt}],
         )
 
-        # Parse the response
-        response_text = message.content[0].text.strip()
-        # Handle potential markdown code block wrapping
-        if response_text.startswith("```"):
-            lines = response_text.split("\n")
-            # Remove first and last lines (```json and ```)
-            lines = [l for l in lines if not l.startswith("```")]
-            response_text = "\n".join(lines)
-
-        suggestions_raw = json.loads(response_text)
+        suggestions_raw = _parse_claude_suggestions(message.content[0].text)
         suggestions = [
             DeviceSuggestion(name=s["name"], reasoning=s["reasoning"])
             for s in suggestions_raw
@@ -239,5 +245,142 @@ def set_device_name(equipment_id: str, cluster_id: int, body: DeviceNameUpdate):
             conn.commit()
 
         return {"status": "ok", "name": body.name}
+    finally:
+        conn.close()
+
+
+@router.post("/devices/auto-name")
+def auto_name_all_devices():
+    """Batch AI naming: call Claude Haiku for every unnamed device and save results.
+
+    Skips devices that already have a user-confirmed name in device_labels.
+    Uses 1-second sleep between Claude calls to avoid rate limiting.
+    """
+    _ensure_device_labels_table()
+
+    conn = _get_spannilm_db()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Load all circuit profiles with shape_devices
+            cur.execute(
+                "SELECT equipment_id, circuit_name, shape_devices, correlations FROM circuit_profiles"
+            )
+            profiles = cur.fetchall()
+
+            # Load existing user-confirmed labels (source='user') to skip
+            cur.execute(
+                "SELECT equipment_id, cluster_id FROM device_labels WHERE source = 'user'"
+            )
+            user_labels = {(row["equipment_id"], row["cluster_id"]) for row in cur.fetchall()}
+
+        # Build list of devices that need naming
+        devices_to_name: list[tuple[str, int, dict]] = []  # (equipment_id, cluster_id, template)
+        for profile in profiles:
+            shape_devices = profile.get("shape_devices") or []
+            if isinstance(shape_devices, str):
+                shape_devices = json.loads(shape_devices)
+
+            correlations = profile.get("correlations") or []
+            if isinstance(correlations, str):
+                correlations = json.loads(correlations)
+
+            for sd in shape_devices:
+                cluster_id = sd.get("cluster_id", 0)
+                equipment_id = profile["equipment_id"]
+
+                # Skip if user already confirmed a name
+                if (equipment_id, cluster_id) in user_labels:
+                    continue
+
+                # Build template dict for prompt
+                template = dict(sd)
+                template["circuit_name"] = profile["circuit_name"]
+                template["correlations"] = correlations
+                devices_to_name.append((equipment_id, cluster_id, template))
+
+        if not devices_to_name:
+            return {"status": "ok", "named": 0, "message": "All devices already named"}
+
+        # Call Claude for each device
+        client = anthropic.Anthropic()
+        named_count = 0
+        errors = []
+
+        for equipment_id, cluster_id, template in devices_to_name:
+            prompt = _build_suggest_prompt(template)
+            try:
+                message = client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=500,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                suggestions = _parse_claude_suggestions(message.content[0].text)
+                if not suggestions:
+                    continue
+
+                # Take the top suggestion
+                best_name = suggestions[0]["name"]
+                logger.info(
+                    "Auto-naming %s cluster %d: %s",
+                    equipment_id, cluster_id, best_name,
+                )
+
+                with conn.cursor() as cur:
+                    # Update shape_devices JSONB in circuit_profiles
+                    cur.execute(
+                        "SELECT shape_devices FROM circuit_profiles WHERE equipment_id = %s",
+                        (equipment_id,),
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        sd_list = row[0] or []
+                        if isinstance(sd_list, str):
+                            sd_list = json.loads(sd_list)
+
+                        updated = False
+                        for sd in sd_list:
+                            if sd.get("cluster_id") == cluster_id:
+                                sd["name"] = best_name
+                                updated = True
+                                break
+                        if not updated and 0 <= cluster_id < len(sd_list):
+                            sd_list[cluster_id]["name"] = best_name
+                            updated = True
+
+                        if updated:
+                            cur.execute(
+                                "UPDATE circuit_profiles SET shape_devices = %s::jsonb WHERE equipment_id = %s",
+                                (json.dumps(sd_list), equipment_id),
+                            )
+
+                    # Upsert into device_labels with source='ai_auto'
+                    cur.execute(
+                        """
+                        INSERT INTO device_labels (equipment_id, cluster_id, name, source)
+                        VALUES (%s, %s, %s, 'ai_auto')
+                        ON CONFLICT (equipment_id, cluster_id)
+                        DO UPDATE SET name = EXCLUDED.name, source = 'ai_auto', created_at = now()
+                        WHERE device_labels.source != 'user'
+                        """,
+                        (equipment_id, cluster_id, best_name),
+                    )
+                    conn.commit()
+
+                named_count += 1
+
+            except (anthropic.APIError, json.JSONDecodeError, KeyError, IndexError) as e:
+                logger.warning("Auto-name failed for %s cluster %d: %s", equipment_id, cluster_id, e)
+                errors.append(f"{equipment_id}:{cluster_id}: {e}")
+
+            # Rate limit: 1 second between calls
+            time.sleep(1)
+
+        return {
+            "status": "ok",
+            "named": named_count,
+            "total_candidates": len(devices_to_name),
+            "errors": errors[:10] if errors else [],
+        }
+
     finally:
         conn.close()

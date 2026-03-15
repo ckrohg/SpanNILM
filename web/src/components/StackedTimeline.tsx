@@ -6,15 +6,18 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  Legend,
 } from 'recharts'
 import type { TimelineBucket } from '../lib/api'
 
-// Deterministic color palette for circuits
+// Distinct color palette for circuits
 const COLORS = [
-  '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
-  '#84cc16', '#e879f9', '#0ea5e9', '#fb923c', '#a3e635',
-  '#c084fc',
+  '#3b82f6', // blue
+  '#22c55e', // green
+  '#f59e0b', // orange
+  '#8b5cf6', // purple
+  '#06b6d4', // cyan
+  '#ec4899', // pink
 ]
 
 function formatTime(ts: string): string {
@@ -35,7 +38,7 @@ interface Props {
 export default function StackedTimeline({ timeline, alwaysOnW }: Props) {
   if (!timeline.length) {
     return (
-      <div className="h-64 rounded-xl bg-gray-900/50 border border-gray-800 flex items-center justify-center text-gray-500">
+      <div className="h-48 sm:h-64 rounded-xl bg-gray-900/50 border border-gray-800 flex items-center justify-center text-gray-500">
         No timeline data
       </div>
     )
@@ -87,68 +90,80 @@ export default function StackedTimeline({ timeline, alwaysOnW }: Props) {
   })
 
   return (
-    <div className="h-64 rounded-xl bg-gray-900/50 border border-gray-800 p-4">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={chartData}>
-          <defs>
-            {allKeys.map((key) => (
-              <linearGradient key={key} id={`grad-${key}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={colorMap[key]} stopOpacity={0.6} />
-                <stop offset="95%" stopColor={colorMap[key]} stopOpacity={0.1} />
-              </linearGradient>
-            ))}
-          </defs>
-          <XAxis
-            dataKey="time"
-            stroke="#4b5563"
-            fontSize={10}
-            tickLine={false}
-            interval="preserveStartEnd"
-            minTickGap={60}
-          />
-          <YAxis
-            stroke="#4b5563"
-            fontSize={10}
-            tickLine={false}
-            tickFormatter={(v) => formatPower(v)}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: '#1f2937',
-              border: '1px solid #374151',
-              borderRadius: '0.5rem',
-              fontSize: '11px',
-            }}
-            formatter={(value: number, name: string) => [formatPower(value), name]}
-            labelFormatter={(label) => `Time: ${label}`}
-          />
-          {alwaysOnW > 0 && (
-            <ReferenceLine
-              y={alwaysOnW}
-              stroke="#f59e0b"
-              strokeDasharray="6 3"
-              strokeWidth={1.5}
-              label={{
-                value: `Always on: ${formatPower(alwaysOnW)}`,
-                position: 'right',
-                fill: '#f59e0b',
-                fontSize: 10,
+    <div className="rounded-xl bg-gray-900/50 border border-gray-800 p-2 sm:p-4">
+      <div className="h-48 sm:h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData}>
+            <defs>
+              {allKeys.map((key) => (
+                <linearGradient key={key} id={`grad-${key}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={colorMap[key]} stopOpacity={0.6} />
+                  <stop offset="95%" stopColor={colorMap[key]} stopOpacity={0.1} />
+                </linearGradient>
+              ))}
+            </defs>
+            <XAxis
+              dataKey="time"
+              stroke="#4b5563"
+              fontSize={10}
+              tickLine={false}
+              interval="preserveStartEnd"
+              minTickGap={60}
+            />
+            <YAxis
+              stroke="#4b5563"
+              fontSize={10}
+              tickLine={false}
+              tickFormatter={(v) => formatPower(v)}
+              width={50}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#1f2937',
+                border: '1px solid #374151',
+                borderRadius: '0.5rem',
+                fontSize: '11px',
               }}
+              formatter={(value: number, name: string) => [formatPower(value), name]}
+              labelFormatter={(label) => `Time: ${label}`}
+              itemSorter={(item) => -(item.value as number)}
             />
-          )}
-          {allKeys.map((key) => (
-            <Area
-              key={key}
-              type="monotone"
-              dataKey={key}
-              stackId="1"
-              stroke={colorMap[key]}
-              fill={`url(#grad-${key})`}
-              strokeWidth={1}
+            <Legend
+              wrapperStyle={{ fontSize: '10px', paddingTop: '4px' }}
+              iconType="square"
+              iconSize={8}
+              formatter={(value) => (
+                <span className="text-gray-400">{value}</span>
+              )}
             />
-          ))}
-        </AreaChart>
-      </ResponsiveContainer>
+            {alwaysOnW > 0 && (
+              <ReferenceLine
+                y={alwaysOnW}
+                stroke="#f59e0b"
+                strokeDasharray="6 3"
+                strokeWidth={1.5}
+                label={{
+                  value: `Always on: ${formatPower(alwaysOnW)}`,
+                  position: 'right',
+                  fill: '#f59e0b',
+                  fontSize: 10,
+                }}
+              />
+            )}
+            {allKeys.map((key) => (
+              <Area
+                key={key}
+                type="monotone"
+                dataKey={key}
+                stackId="1"
+                stroke={colorMap[key]}
+                fill={`url(#grad-${key})`}
+                strokeWidth={1}
+              />
+            ))}
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   )
 }

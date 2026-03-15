@@ -9,31 +9,31 @@ export default function BillProjection({ projection, costDrivers }: Props) {
   const progressPct = (projection.days_elapsed / (projection.days_elapsed + projection.days_remaining)) * 100
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
-      <div className="flex items-start justify-between mb-4">
+    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 sm:p-5">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 sm:mb-4 gap-1 sm:gap-0">
         <div>
-          <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
+          <h3 className="text-[10px] sm:text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
             Projected Monthly Bill
           </h3>
-          <div className="text-3xl font-mono font-bold text-white">
+          <div className="text-2xl sm:text-3xl font-mono font-bold text-white">
             ${projection.projected_monthly_cost.toFixed(0)}
           </div>
-          <div className="text-sm text-gray-500 mt-0.5">
+          <div className="text-xs sm:text-sm text-gray-500 mt-0.5">
             On track for {projection.projected_monthly_kwh.toFixed(0)} kWh
           </div>
         </div>
-        <div className="text-right text-xs text-gray-500">
+        <div className="text-left sm:text-right text-[10px] sm:text-xs text-gray-500">
           <div>{projection.daily_avg_kwh.toFixed(1)} kWh/day avg</div>
         </div>
       </div>
 
       {/* Progress bar */}
-      <div className="mb-4">
-        <div className="flex justify-between text-[11px] text-gray-500 mb-1">
+      <div className="mb-3 sm:mb-4">
+        <div className="flex justify-between text-[10px] sm:text-[11px] text-gray-500 mb-1">
           <span>Day {projection.days_elapsed}</span>
           <span>{projection.days_remaining} days left</span>
         </div>
-        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+        <div className="h-1.5 sm:h-2 bg-gray-800 rounded-full overflow-hidden">
           <div
             className="h-full rounded-full bg-blue-500/80 transition-all duration-500"
             style={{ width: `${progressPct}%` }}
@@ -49,20 +49,20 @@ export default function BillProjection({ projection, costDrivers }: Props) {
           </h4>
           <div className="space-y-1.5">
             {costDrivers.slice(0, 5).map((driver) => (
-              <div key={driver.name} className="flex items-center gap-2">
-                <span className="text-xs text-gray-400 w-32 min-w-[8rem] truncate">
+              <div key={driver.name} className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-[10px] sm:text-xs text-gray-400 w-20 sm:w-32 min-w-[5rem] sm:min-w-[8rem] truncate">
                   {driver.name}
                 </span>
-                <div className="flex-1 h-2 bg-gray-800/60 rounded-full overflow-hidden">
+                <div className="flex-1 h-1.5 sm:h-2 bg-gray-800/60 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full bg-emerald-500/60"
                     style={{ width: `${driver.pct_of_total}%` }}
                   />
                 </div>
-                <span className="text-[11px] font-mono text-green-500/80 w-12 text-right">
+                <span className="text-[10px] sm:text-[11px] font-mono text-green-500/80 w-10 sm:w-12 text-right">
                   ${driver.cost.toFixed(0)}
                 </span>
-                <span className="text-[11px] font-mono text-gray-600 w-10 text-right">
+                <span className="text-[10px] sm:text-[11px] font-mono text-gray-600 w-8 sm:w-10 text-right">
                   {driver.pct_of_total.toFixed(0)}%
                 </span>
               </div>

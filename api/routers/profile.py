@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Query
 
 from api.deps import get_tempiq_source
+from api.routers.device_naming import auto_name_all_devices
 from span_nilm.profiler.circuit_profiler import CircuitProfiler
 
 logger = logging.getLogger("span_nilm.api.profile")
@@ -16,7 +17,7 @@ router = APIRouter(prefix="/api")
 @router.post("/profile")
 def run_profile(
     equipment_id: Optional[str] = Query(default=None, description="Profile a single circuit"),
-    days: int = Query(default=30, ge=7, le=180, description="Days of history to analyze"),
+    days: int = Query(default=90, ge=7, le=180, description="Days of history to analyze"),
 ):
     """Run the circuit profiler on all circuits (or a specific one) and store results."""
     source = get_tempiq_source()
@@ -34,6 +35,13 @@ def run_profile(
 
     saved = profiler.save_profiles(profiles)
     logger.info("Saved %d circuit profiles", saved)
+
+    # Auto-name unnamed devices after saving profiles
+    try:
+        auto_result = auto_name_all_devices()
+        logger.info("Auto-named %d devices", auto_result.get("named", 0))
+    except Exception as e:
+        logger.warning("Auto-naming failed (non-fatal): %s", e)
 
     return {
         "status": "ok",

@@ -1,6 +1,6 @@
 """Circuit profiler — identifies distinct power states and devices on each circuit.
 
-Analyzes 30+ days of historical power data to find histogram peaks (power states),
+Analyzes 90 days of historical power data to find histogram peaks (power states),
 then matches those states against known device signatures and dedicated circuit
 reference profiles.
 """
@@ -63,7 +63,7 @@ class CircuitProfiler:
         source: TempIQSource | None = None,
         spannilm_db_url: str | None = None,
         signatures_file: str = "./device_signatures.yaml",
-        data_days: int = 30,
+        data_days: int = 90,
     ):
         self.source = source or TempIQSource()
         self.db_url = spannilm_db_url or os.environ["SPANNILM_DATABASE_URL"]

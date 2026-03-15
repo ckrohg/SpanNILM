@@ -216,44 +216,44 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
             <div key={circuit.equipment_id} className="bg-gray-900/40 rounded-lg border border-gray-800/50 overflow-hidden">
               {/* Circuit header row */}
               <div
-                className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-800/30 transition-colors"
+                className="flex items-center gap-2 sm:gap-3 px-2.5 sm:px-4 py-2 sm:py-2.5 cursor-pointer hover:bg-gray-800/30 transition-colors"
                 onClick={() => setExpanded(isExpanded ? null : circuit.equipment_id)}
               >
                 <span
-                  className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                  className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full flex-shrink-0 ${
                     isActive ? 'bg-green-400' : 'bg-gray-700'
                   }`}
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium truncate ${isActive ? 'text-gray-100' : 'text-gray-400'}`}>
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className={`text-xs sm:text-sm font-medium truncate max-w-[120px] sm:max-w-none ${isActive ? 'text-gray-100' : 'text-gray-400'}`}>
                       {circuit.name}
                     </span>
                     {circuit.is_dedicated && circuit.device_type && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-300 flex-shrink-0 border border-blue-800/50">
+                      <span className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-300 flex-shrink-0 border border-blue-800/50 hidden sm:inline">
                         {circuit.device_type}
                       </span>
                     )}
                   </div>
                   {/* Energy bar */}
-                  <div className="mt-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div className="mt-1 h-1 sm:h-1.5 bg-gray-800 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${circuit.is_dedicated ? 'bg-blue-500' : 'bg-emerald-500'}`}
                       style={{ width: `${Math.max(pct, 0.5)}%`, opacity: circuit.energy_today_kwh > 0.01 ? 0.8 : 0.1 }}
                     />
                   </div>
                 </div>
-                <div className="flex items-center gap-4 flex-shrink-0 text-right">
-                  <span className={`text-sm font-mono ${isActive ? 'text-gray-200' : 'text-gray-600'}`}>
+                <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0 text-right">
+                  <span className={`text-xs sm:text-sm font-mono ${isActive ? 'text-gray-200' : 'text-gray-600'}`}>
                     {isActive ? formatPower(circuit.power_w) : '--'}
                   </span>
-                  <span className="text-xs text-gray-500 w-16">
+                  <span className="text-[10px] sm:text-xs text-gray-500 w-12 sm:w-16 hidden sm:block">
                     {circuit.energy_today_kwh > 0.01 ? `${circuit.energy_today_kwh.toFixed(1)} kWh` : '--'}
                   </span>
                   {onCircuitClick && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onCircuitClick(circuit.equipment_id) }}
-                      className="p-1 text-gray-600 hover:text-gray-300 transition-colors"
+                      className="p-1 text-gray-600 hover:text-gray-300 transition-colors hidden sm:block"
                       title="View details"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -262,7 +262,7 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                     </button>
                   )}
                   <svg
-                    className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                    className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                     fill="none" viewBox="0 0 24 24" stroke="currentColor"
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />

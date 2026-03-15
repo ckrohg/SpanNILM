@@ -27,7 +27,7 @@ logger = logging.getLogger("span_nilm.profiler.shape")
 CURVE_LENGTH = 32  # Normalized curve resolution (32 points)
 MIN_SESSION_DURATION_MIN = 2  # Minimum session length to analyze
 MIN_SESSIONS_FOR_CLUSTERING = 5
-ON_THRESHOLD_W = 15
+ON_THRESHOLD_W = 8
 
 
 @dataclass
@@ -233,9 +233,26 @@ class ShapeDetector:
 
             # Pattern features
             # Number of distinct power phases (levels within session)
+            # Use 1D clustering: group consecutive readings at similar levels
             if len(power) >= 5:
-                rounded = np.round(power / max(50, peak_w * 0.1)) * max(50, peak_w * 0.1)
-                num_phases = len(np.unique(rounded[rounded > self.on_threshold_w]))
+                phase_threshold = max(30, mean_w * 0.15)
+                phases_list: list[list[float]] = [[float(power[0])]]
+                for pi in range(1, len(power)):
+                    cur_mean = np.mean(phases_list[-1])
+                    if abs(float(power[pi]) - cur_mean) > phase_threshold:
+                        if len(phases_list[-1]) >= 2:
+                            phases_list.append([float(power[pi])])
+                        else:
+                            phases_list[-1].append(float(power[pi]))
+                    else:
+                        phases_list[-1].append(float(power[pi]))
+                phase_means = [np.mean(p) for p in phases_list if len(p) >= 2 and np.mean(p) > self.on_threshold_w]
+                # Deduplicate similar levels
+                unique_phases: list[float] = []
+                for pm in phase_means:
+                    if not any(abs(pm - up) < phase_threshold for up in unique_phases):
+                        unique_phases.append(pm)
+                num_phases = max(1, len(unique_phases))
             else:
                 num_phases = 1
 
@@ -378,10 +395,21 @@ class ShapeDetector:
             hour_counts = pd.Series(hours).value_counts()
             peak_hours = hour_counts.nlargest(3).index.tolist()
 
+            # Check for high phase variance (multiple overlapping devices)
+            std_power = float(np.std(powers))
+            high_phase_variance = (std_power / max(avg_power, 1)) > 0.4
+
             # Name: use cluster label + power level for now
             # (Circuit profiler will add context-aware names)
             if label == -1:
                 name = f"Noise/outlier ({avg_power:.0f}W)"
+            elif high_phase_variance:
+                name = self._infer_name(
+                    avg_power, peak_power, float(np.mean(durations)),
+                    max(num_phases, 3), has_surge, is_cycling, circuit_name,
+                )
+                # Boost num_phases to reflect detected variance
+                num_phases = max(num_phases, 3)
             else:
                 name = self._infer_name(
                     avg_power, peak_power, float(np.mean(durations)),
@@ -479,11 +507,16 @@ class ShapeDetector:
             return "High-power outlet load"
 
         # Sub-panel circuits — use shape characteristics
+        is_sub_panel = any(kw in name_lower for kw in ("sub panel", "subpanel", "sub-panel"))
         location = ""
         for loc in ("barn", "basement", "2nd floor", "upstairs"):
             if loc in name_lower:
                 location = loc.title() + " "
                 break
+
+        # Sub-panel with 3+ distinct phases = multiple overlapping devices
+        if is_sub_panel and num_phases >= 3:
+            return f"{location}Multiple loads ({num_phases} devices)"
 
         # --- Shape-based naming (when circuit name isn't specific) ---
 
