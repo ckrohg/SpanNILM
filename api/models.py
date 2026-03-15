@@ -136,6 +136,29 @@ class TimelineBucket(BaseModel):
     circuits: dict[str, float]
 
 
+class BillProjection(BaseModel):
+    projected_monthly_kwh: float
+    projected_monthly_cost: float
+    days_elapsed: int
+    days_remaining: int
+    daily_avg_kwh: float
+
+
+class CostAttribution(BaseModel):
+    name: str
+    energy_kwh: float
+    cost: float
+    pct_of_total: float
+
+
+class UsageTrend(BaseModel):
+    circuit_name: str
+    current_period_kwh: float
+    previous_period_kwh: float
+    change_pct: float
+    direction: str  # up, down, stable
+
+
 class DashboardResponse(BaseModel):
     total_power_w: float
     always_on_w: float
@@ -147,3 +170,37 @@ class DashboardResponse(BaseModel):
     total_energy_month_kwh: float
     total_cost_month: float
     electricity_rate: float
+    bill_projection: BillProjection | None = None
+    top_cost_drivers: list[CostAttribution] = []
+    trends: list[UsageTrend] = []
+
+
+class DailyEnergy(BaseModel):
+    date: str
+    energy_kwh: float
+    cost: float
+
+
+class Anomaly(BaseModel):
+    timestamp: str
+    description: str
+    severity: str  # info, warning, alert
+    value: float
+    expected: float
+
+
+class CircuitDetailResponse(BaseModel):
+    equipment_id: str
+    name: str
+    is_dedicated: bool
+    device_type: str | None = None
+    power_series: list[PowerPoint]
+    daily_energy: list[DailyEnergy]
+    devices: list[DetectedDevice] = []
+    avg_power_w: float
+    peak_power_w: float
+    min_power_w: float
+    always_on_w: float
+    energy_period_kwh: float
+    cost_period: float
+    anomalies: list[Anomaly] = []

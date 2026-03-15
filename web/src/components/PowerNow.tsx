@@ -34,7 +34,12 @@ function MiniSparkline({ curve }: { curve: number[] }) {
   )
 }
 
-export default function PowerNow({ circuits }: { circuits: CircuitPower[] }) {
+interface PowerNowProps {
+  circuits: CircuitPower[]
+  onCircuitClick?: (equipmentId: string) => void
+}
+
+export default function PowerNow({ circuits, onCircuitClick }: PowerNowProps) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const sorted = [...circuits].sort((a, b) => b.energy_today_kwh - a.energy_today_kwh)
   const maxEnergy = sorted[0]?.energy_today_kwh || 1
@@ -95,6 +100,17 @@ export default function PowerNow({ circuits }: { circuits: CircuitPower[] }) {
                 <span className="text-xs text-gray-500 w-16">
                   {circuit.energy_today_kwh > 0.01 ? `${circuit.energy_today_kwh.toFixed(1)} kWh` : '--'}
                 </span>
+                {onCircuitClick && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onCircuitClick(circuit.equipment_id) }}
+                    className="p-1 text-gray-600 hover:text-gray-300 transition-colors"
+                    title="View details"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                )}
                 <svg
                   className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                   fill="none" viewBox="0 0 24 24" stroke="currentColor"

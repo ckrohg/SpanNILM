@@ -5,12 +5,15 @@ import PowerNow from './components/PowerNow'
 import StackedTimeline from './components/StackedTimeline'
 import EnergySummary from './components/EnergySummary'
 import AlwaysOnCard from './components/AlwaysOnCard'
+import BillProjectionCard from './components/BillProjection'
+import UsageTrends from './components/UsageTrends'
 import DeviceCard from './components/DeviceCard'
 import ActivityFeed from './components/ActivityFeed'
 import Circuits from './pages/Circuits'
+import CircuitDetail from './pages/CircuitDetail'
 import Settings from './pages/Settings'
 
-type Page = 'dashboard' | 'circuits' | 'settings'
+type Page = 'dashboard' | 'circuits' | 'settings' | 'detail'
 
 function formatPower(w: number): string {
   return w >= 1000 ? `${(w / 1000).toFixed(1)} kW` : `${Math.round(w)} W`
@@ -41,6 +44,7 @@ function NavLink({
 
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
+  const [selectedCircuit, setSelectedCircuit] = useState<string | null>(null)
   const { data: dashboard, loading, error, refresh } = useDashboard()
   const { data: analysis } = useAnalysis(24)
 
@@ -86,6 +90,12 @@ export default function App() {
       <main className="max-w-5xl mx-auto px-6 py-6 space-y-6">
         {page === 'circuits' && <Circuits />}
         {page === 'settings' && <Settings />}
+        {page === 'detail' && selectedCircuit && (
+          <CircuitDetail
+            equipmentId={selectedCircuit}
+            onBack={() => { setPage('dashboard'); setSelectedCircuit(null) }}
+          />
+        )}
 
         {page === 'dashboard' && (
           <>
@@ -140,7 +150,10 @@ export default function App() {
                   <h2 className="text-sm font-medium text-gray-400 mb-2">
                     Power Now
                   </h2>
-                  <PowerNow circuits={dashboard.circuits} />
+                  <PowerNow
+                    circuits={dashboard.circuits}
+                    onCircuitClick={(id) => { setSelectedCircuit(id); setPage('detail') }}
+                  />
                 </section>
 
                 {/* Stacked timeline */}
@@ -153,6 +166,19 @@ export default function App() {
                     alwaysOnW={dashboard.always_on_w}
                   />
                 </section>
+
+                {/* Bill projection + Usage trends */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {dashboard.bill_projection && (
+                    <BillProjectionCard
+                      projection={dashboard.bill_projection}
+                      costDrivers={dashboard.top_cost_drivers}
+                    />
+                  )}
+                  {dashboard.trends.length > 0 && (
+                    <UsageTrends trends={dashboard.trends} />
+                  )}
+                </div>
 
                 {/* Energy summary */}
                 <section>

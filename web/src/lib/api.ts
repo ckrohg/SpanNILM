@@ -163,6 +163,29 @@ export interface TimelineBucket {
   circuits: Record<string, number>
 }
 
+export interface BillProjection {
+  projected_monthly_kwh: number
+  projected_monthly_cost: number
+  days_elapsed: number
+  days_remaining: number
+  daily_avg_kwh: number
+}
+
+export interface CostAttribution {
+  name: string
+  energy_kwh: number
+  cost: number
+  pct_of_total: number
+}
+
+export interface UsageTrend {
+  circuit_name: string
+  current_period_kwh: number
+  previous_period_kwh: number
+  change_pct: number
+  direction: 'up' | 'down' | 'stable'
+}
+
 export interface DashboardData {
   total_power_w: number
   always_on_w: number
@@ -174,6 +197,40 @@ export interface DashboardData {
   total_energy_month_kwh: number
   total_cost_month: number
   electricity_rate: number
+  bill_projection: BillProjection | null
+  top_cost_drivers: CostAttribution[]
+  trends: UsageTrend[]
+}
+
+export interface DailyEnergy {
+  date: string
+  energy_kwh: number
+  cost: number
+}
+
+export interface Anomaly {
+  timestamp: string
+  description: string
+  severity: 'info' | 'warning' | 'alert'
+  value: number
+  expected: number
+}
+
+export interface CircuitDetailData {
+  equipment_id: string
+  name: string
+  is_dedicated: boolean
+  device_type: string | null
+  power_series: PowerPoint[]
+  daily_energy: DailyEnergy[]
+  devices: DetectedDevice[]
+  avg_power_w: number
+  peak_power_w: number
+  min_power_w: number
+  always_on_w: number
+  energy_period_kwh: number
+  cost_period: number
+  anomalies: Anomaly[]
 }
 
 export async function fetchDashboard(): Promise<DashboardData> {
@@ -211,5 +268,16 @@ export async function updateSettings(updates: Settings): Promise<Settings> {
     body: JSON.stringify(updates),
   })
   if (!res.ok) throw new Error(`Failed to update settings: ${res.status}`)
+  return res.json()
+}
+
+export async function fetchCircuitDetail(
+  equipmentId: string,
+  days = 7
+): Promise<CircuitDetailData> {
+  const res = await fetch(
+    `${API_URL}/api/circuit/${equipmentId}/detail?days=${days}`
+  )
+  if (!res.ok) throw new Error(`Circuit detail failed: ${res.status}`)
   return res.json()
 }

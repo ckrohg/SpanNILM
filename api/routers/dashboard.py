@@ -11,7 +11,17 @@ import psycopg2.extras
 from fastapi import APIRouter, Query
 
 from api.deps import get_tempiq_source
-from api.models import CircuitPower, CorrelationInfo, DashboardResponse, DetectedDevice, TemporalInfo, TimelineBucket
+from api.models import (
+    BillProjection,
+    CircuitPower,
+    CorrelationInfo,
+    CostAttribution,
+    DashboardResponse,
+    DetectedDevice,
+    TemporalInfo,
+    TimelineBucket,
+    UsageTrend,
+)
 
 logger = logging.getLogger("span_nilm.api.dashboard")
 router = APIRouter(prefix="/api")
@@ -232,6 +242,89 @@ def get_dashboard(
     total_energy_today = sum(c.energy_today_kwh for c in circuits)
     total_energy_month = sum(c.energy_month_kwh for c in circuits)
 
+    # 8. Bill projection
+    import calendar
+    days_elapsed = now_eastern.day
+    days_in_month = calendar.monthrange(now_eastern.year, now_eastern.month)[1]
+    days_remaining = days_in_month - days_elapsed
+
+    bill_projection = None
+    if days_elapsed > 0 and total_energy_month > 0:
+        daily_avg_kwh = total_energy_month / days_elapsed
+        projected_kwh = daily_avg_kwh * days_in_month
+        bill_projection = BillProjection(
+            projected_monthly_kwh=round(projected_kwh, 1),
+            projected_monthly_cost=round(projected_kwh * electricity_rate, 2),
+            days_elapsed=days_elapsed,
+            days_remaining=days_remaining,
+            daily_avg_kwh=round(daily_avg_kwh, 1),
+        )
+
+    # 9. Top cost drivers (by monthly energy)
+    top_cost_drivers: list[CostAttribution] = []
+    if total_energy_month > 0:
+        sorted_by_energy = sorted(circuits, key=lambda c: c.energy_month_kwh, reverse=True)
+        for c in sorted_by_energy[:6]:
+            if c.energy_month_kwh > 0:
+                top_cost_drivers.append(CostAttribution(
+                    name=c.name,
+                    energy_kwh=round(c.energy_month_kwh, 2),
+                    cost=round(c.cost_month, 2),
+                    pct_of_total=round(c.energy_month_kwh / total_energy_month * 100, 1),
+                ))
+
+    # 10. Usage trends (last 7 days vs previous 7 days)
+    trends: list[UsageTrend] = []
+    try:
+        week_ago = now - timedelta(days=7)
+        two_weeks_ago = now - timedelta(days=14)
+        agg_current_week = source.get_aggregated_power(week_ago, now)
+        agg_prev_week = source.get_aggregated_power(two_weeks_ago, week_ago)
+
+        current_energy: dict[str, float] = {}
+        prev_energy: dict[str, float] = {}
+
+        if not agg_current_week.empty:
+            for cid, group in agg_current_week.groupby("circuit_id"):
+                current_energy[str(cid)] = float(group["power_w"].sum()) * (10.0 / 60.0) / 1000.0
+
+        if not agg_prev_week.empty:
+            for cid, group in agg_prev_week.groupby("circuit_id"):
+                prev_energy[str(cid)] = float(group["power_w"].sum()) * (10.0 / 60.0) / 1000.0
+
+        all_ids = set(current_energy.keys()) | set(prev_energy.keys())
+        for cid in all_ids:
+            curr = current_energy.get(cid, 0)
+            prev = prev_energy.get(cid, 0)
+            if prev > 0.1:
+                change_pct = ((curr - prev) / prev) * 100
+            elif curr > 0.1:
+                change_pct = 100.0
+            else:
+                continue
+
+            if abs(change_pct) < 15:
+                direction = "stable"
+            elif change_pct > 0:
+                direction = "up"
+            else:
+                direction = "down"
+
+            # Only include significant changes
+            if direction != "stable":
+                cname = circuit_names.get(cid, cid)
+                trends.append(UsageTrend(
+                    circuit_name=cname,
+                    current_period_kwh=round(curr, 2),
+                    previous_period_kwh=round(prev, 2),
+                    change_pct=round(change_pct, 1),
+                    direction=direction,
+                ))
+
+        trends.sort(key=lambda t: abs(t.change_pct), reverse=True)
+    except Exception as e:
+        logger.debug("Could not compute usage trends: %s", e)
+
     return DashboardResponse(
         total_power_w=round(total_power_w, 1),
         always_on_w=round(total_always_on_w, 1),
@@ -243,4 +336,7 @@ def get_dashboard(
         total_energy_month_kwh=round(total_energy_month, 2),
         total_cost_month=round(total_energy_month * electricity_rate, 2),
         electricity_rate=electricity_rate,
+        bill_projection=bill_projection,
+        top_cost_drivers=top_cost_drivers,
+        trends=trends,
     )
