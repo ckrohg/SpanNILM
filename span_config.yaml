@@ -14,9 +14,11 @@ detection:
   # Minimum power change (watts) to register as an event
   min_power_delta_w: 15
   # Window size for smoothing (number of samples)
-  smoothing_window: 5
-  # Minimum duration (seconds) for a state to be considered stable
-  min_state_duration_s: 3
+  # At ~1-min intervals from TempIQ, 3 samples = 3 minutes
+  smoothing_window: 3
+  # Minimum samples for a state to be considered stable
+  # At ~1-min intervals, 2 samples = ~2 minutes
+  min_state_duration_s: 2
   # Maximum gap (seconds) between on/off events to pair them
   max_event_pair_gap_s: 7200
 

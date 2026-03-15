@@ -25,9 +25,14 @@ venv/
 .vscode/
 *.swp
 
+# Node
+node_modules/
+web/dist/
+
 # Logs
 *.log
 
 # OS
 .DS_Store
 Thumbs.db
+.vercel
