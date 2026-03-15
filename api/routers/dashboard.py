@@ -168,7 +168,7 @@ def get_dashboard(
     circuits.sort(key=lambda c: c.power_w, reverse=True)
 
     # 5. Stacked power timeline (24h, 5-min buckets)
-    timeline_rows = source.get_power_timeline(yesterday, now, bucket_minutes=5)
+    timeline_rows = source.get_power_timeline(yesterday, now, bucket_minutes=60)
 
     # Group by bucket timestamp
     buckets: dict[str, dict[str, float]] = defaultdict(dict)

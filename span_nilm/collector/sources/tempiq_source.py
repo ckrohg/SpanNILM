@@ -211,51 +211,63 @@ class TempIQSource(DataSource):
 
         return results
 
-    def get_power_timeline(self, start: datetime, end: datetime, bucket_minutes: int = 5) -> list[dict]:
-        """Get bucketed average power per circuit for stacked timeline chart."""
+    def get_power_timeline(self, start: datetime, end: datetime, bucket_minutes: int = 10) -> list[dict]:
+        """Get power per circuit per time bucket using energy counter differences.
+
+        The energy counter has low resolution (~10 Wh increments), so we can't derive
+        per-reading power. Instead, we take the energy difference across each bucket
+        (first vs last reading) and divide by bucket duration to get average power.
+        """
         query = """
-        WITH energy_readings AS (
+        WITH bucketed AS (
             SELECT
                 r.equipment_id,
                 e.name AS circuit_name,
-                r.timestamp,
+                date_trunc('hour', r.timestamp) +
+                    (EXTRACT(MINUTE FROM r.timestamp)::int / %s * %s) * INTERVAL '1 minute' AS bucket,
                 r.imported_active_energy_wh::float AS wh,
-                LAG(r.imported_active_energy_wh::float) OVER (
-                    PARTITION BY r.equipment_id ORDER BY r.timestamp
-                ) AS prev_wh,
-                LAG(r.timestamp) OVER (
-                    PARTITION BY r.equipment_id ORDER BY r.timestamp
-                ) AS prev_ts
+                ROW_NUMBER() OVER (PARTITION BY r.equipment_id,
+                    date_trunc('hour', r.timestamp) + (EXTRACT(MINUTE FROM r.timestamp)::int / %s * %s) * INTERVAL '1 minute'
+                    ORDER BY r.timestamp ASC) AS rn_first,
+                ROW_NUMBER() OVER (PARTITION BY r.equipment_id,
+                    date_trunc('hour', r.timestamp) + (EXTRACT(MINUTE FROM r.timestamp)::int / %s * %s) * INTERVAL '1 minute'
+                    ORDER BY r.timestamp DESC) AS rn_last
             FROM span_circuit_readings r
             JOIN equipment e ON r.equipment_id = e.id
             WHERE r.property_id = %s
               AND r.timestamp >= %s
               AND r.timestamp < %s
         ),
-        power_derived AS (
+        first_last AS (
             SELECT
                 equipment_id,
                 circuit_name,
-                timestamp,
-                CASE
-                    WHEN prev_wh IS NULL THEN 0
-                    WHEN wh - prev_wh < 0 THEN 0
-                    WHEN EXTRACT(EPOCH FROM (timestamp - prev_ts)) < 10 THEN 0
-                    WHEN (wh - prev_wh) / (EXTRACT(EPOCH FROM (timestamp - prev_ts)) / 3600.0) > 15000 THEN 0
-                    ELSE (wh - prev_wh) / (EXTRACT(EPOCH FROM (timestamp - prev_ts)) / 3600.0)
-                END AS power_w
-            FROM energy_readings
-            WHERE prev_wh IS NOT NULL
+                bucket,
+                MAX(CASE WHEN rn_first = 1 THEN wh END) AS first_wh,
+                MAX(CASE WHEN rn_last = 1 THEN wh END) AS last_wh
+            FROM bucketed
+            WHERE rn_first = 1 OR rn_last = 1
+            GROUP BY equipment_id, circuit_name, bucket
         )
         SELECT
-            date_trunc('hour', timestamp) + (EXTRACT(MINUTE FROM timestamp)::int / %s * %s) * INTERVAL '1 minute' AS bucket,
+            bucket,
             circuit_name,
-            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY power_w) AS avg_power_w
-        FROM power_derived
-        GROUP BY bucket, circuit_name
+            CASE
+                WHEN last_wh - first_wh < 0 THEN 0
+                WHEN (last_wh - first_wh) / (%s / 60.0) > 15000 THEN 0
+                ELSE (last_wh - first_wh) / (%s / 60.0)
+            END AS avg_power_w
+        FROM first_last
+        WHERE last_wh IS NOT NULL AND first_wh IS NOT NULL
         ORDER BY bucket
         """
-        rows = self._query(query, (self.property_id, start, end, bucket_minutes, bucket_minutes))
+        rows = self._query(query, (
+            bucket_minutes, bucket_minutes,
+            bucket_minutes, bucket_minutes,
+            bucket_minutes, bucket_minutes,
+            self.property_id, start, end,
+            bucket_minutes, bucket_minutes,
+        ))
         return rows
 
     def get_energy_totals(self, start: datetime, end: datetime) -> list[dict]:
