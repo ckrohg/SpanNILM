@@ -96,18 +96,21 @@ def get_dashboard(
         profile_rows = CircuitProfiler.load_profiles()
         for row in profile_rows:
             eid = row["equipment_id"]
-            # Devices from states
-            devices = []
-            for s in (row.get("states") or []):
-                if s.get("device_name"):
-                    devices.append(DetectedDevice(
-                        name=s["device_name"],
-                        power_w=s["center_w"],
-                        confidence=s.get("confidence", 0),
-                        pct_of_time=s.get("pct_of_time", 0),
-                    ))
-            if devices:
-                profile_devices[eid] = devices
+            # Skip device detection for dedicated circuits — we already know what they are
+            is_ded = row.get("is_dedicated", False)
+
+            if not is_ded:
+                devices = []
+                for s in (row.get("states") or []):
+                    if s.get("device_name"):
+                        devices.append(DetectedDevice(
+                            name=s["device_name"],
+                            power_w=s["center_w"],
+                            confidence=s.get("confidence", 0),
+                            pct_of_time=s.get("pct_of_time", 0),
+                        ))
+                if devices:
+                    profile_devices[eid] = devices
 
             # Temporal info
             t = row.get("temporal") or {}
