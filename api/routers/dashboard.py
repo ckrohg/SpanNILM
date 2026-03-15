@@ -24,6 +24,23 @@ def _get_spannilm_db():
     return psycopg2.connect(os.environ["SPANNILM_DATABASE_URL"])
 
 
+def _load_electricity_rate() -> float:
+    """Load electricity rate from settings table, falling back to default."""
+    try:
+        conn = _get_spannilm_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT value FROM settings WHERE key = 'electricity_rate'")
+                row = cur.fetchone()
+                if row:
+                    return float(row[0])
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.debug("Could not load electricity_rate setting: %s", e)
+    return DEFAULT_ELECTRICITY_RATE
+
+
 def _load_circuit_configs() -> dict[str, dict]:
     """Load circuit configs from SpanNILM DB, keyed by tempiq_equipment_id."""
     conn = _get_spannilm_db()
@@ -37,9 +54,12 @@ def _load_circuit_configs() -> dict[str, dict]:
 
 @router.post("/dashboard", response_model=DashboardResponse)
 def get_dashboard(
-    electricity_rate: float = Query(default=DEFAULT_ELECTRICITY_RATE, ge=0),
+    electricity_rate: float | None = Query(default=None, ge=0),
 ):
     """Return comprehensive dashboard data in one call."""
+    # Use saved setting if no explicit rate provided
+    if electricity_rate is None:
+        electricity_rate = _load_electricity_rate()
     source = get_tempiq_source()
     now = datetime.now(timezone.utc)
     # Use Eastern time for "today" and "this month" boundaries

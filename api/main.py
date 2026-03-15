@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-from api.routers import analysis, circuits, dashboard, profile
+from api.routers import analysis, circuits, dashboard, profile, settings
 
 app = FastAPI(title="SpanNILM", description="Device detection from SPAN circuit power data")
 
@@ -24,6 +24,7 @@ app.include_router(analysis.router)
 app.include_router(circuits.router)
 app.include_router(dashboard.router)
 app.include_router(profile.router)
+app.include_router(settings.router)
 
 
 @app.get("/health")

@@ -187,3 +187,23 @@ export async function getProfiles(): Promise<{ status: string; profiles: unknown
   if (!res.ok) throw new Error(`Failed to fetch profiles: ${res.status}`)
   return res.json()
 }
+
+// Settings API
+
+export type Settings = Record<string, string>
+
+export async function getSettings(): Promise<Settings> {
+  const res = await fetch(`${API_URL}/api/settings`)
+  if (!res.ok) throw new Error(`Failed to fetch settings: ${res.status}`)
+  return res.json()
+}
+
+export async function updateSettings(updates: Settings): Promise<Settings> {
+  const res = await fetch(`${API_URL}/api/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  })
+  if (!res.ok) throw new Error(`Failed to update settings: ${res.status}`)
+  return res.json()
+}

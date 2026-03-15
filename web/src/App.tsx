@@ -8,8 +8,9 @@ import AlwaysOnCard from './components/AlwaysOnCard'
 import DeviceCard from './components/DeviceCard'
 import ActivityFeed from './components/ActivityFeed'
 import Circuits from './pages/Circuits'
+import Settings from './pages/Settings'
 
-type Page = 'dashboard' | 'circuits'
+type Page = 'dashboard' | 'circuits' | 'settings'
 
 function formatPower(w: number): string {
   return w >= 1000 ? `${(w / 1000).toFixed(1)} kW` : `${Math.round(w)} W`
@@ -64,6 +65,9 @@ export default function App() {
               <NavLink active={page === 'circuits'} onClick={() => setPage('circuits')}>
                 Circuits
               </NavLink>
+              <NavLink active={page === 'settings'} onClick={() => setPage('settings')}>
+                Settings
+              </NavLink>
             </nav>
           </div>
           {dashboard && page === 'dashboard' && (
@@ -81,6 +85,7 @@ export default function App() {
 
       <main className="max-w-5xl mx-auto px-6 py-6 space-y-6">
         {page === 'circuits' && <Circuits />}
+        {page === 'settings' && <Settings />}
 
         {page === 'dashboard' && (
           <>

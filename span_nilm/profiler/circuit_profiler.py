@@ -85,9 +85,6 @@ class CircuitProfiler:
         # Load circuit configs from SpanNILM DB
         configs = self._load_circuit_configs()
 
-        # Build dedicated circuit reference profiles for cross-matching
-        dedicated_refs = self._build_dedicated_references(df, configs)
-
         # Profile each circuit (power states + temporal)
         profiles: list[CircuitProfile] = []
         circuit_names_map: dict[str, str] = {}
@@ -102,7 +99,7 @@ class CircuitProfiler:
             group = group.sort_values("timestamp").reset_index(drop=True)
 
             profile = self._profile_circuit(
-                cid, circuit_name, group, is_dedicated, device_type, dedicated_refs
+                cid, circuit_name, group, is_dedicated, device_type
             )
 
             # Add temporal analysis
@@ -162,7 +159,6 @@ class CircuitProfiler:
         group: pd.DataFrame,
         is_dedicated: bool,
         device_type: str | None,
-        dedicated_refs: dict[str, float],
     ) -> CircuitProfile:
         """Profile a single circuit's power data."""
         power = group["power_w"].values.astype(float)
@@ -197,8 +193,8 @@ class CircuitProfiler:
             active_power, active_timestamps, power, timestamps
         )
 
-        # Match devices to states
-        self._match_devices(states, dedicated_refs, is_dedicated, device_type)
+        # Match devices to states using circuit name as primary signal
+        self._match_devices(states, circuit_name, is_dedicated, device_type)
 
         return CircuitProfile(
             equipment_id=circuit_id,
@@ -327,44 +323,230 @@ class CircuitProfiler:
 
         return float(np.mean(durations)) if durations else 0.0
 
+    @staticmethod
+    def _parse_circuit_context(circuit_name: str) -> tuple[str | None, dict]:
+        """Parse circuit name for keywords to determine circuit purpose.
+
+        Returns (context_type, metadata) where context_type is one of:
+        'hydronic', 'garage_door', 'lights_outlets', 'sub_panel',
+        'ev_charger', 'well_pump', 'hvac', 'water_heater', 'range',
+        'dryer', 'washer', 'dishwasher', 'refrigerator', 'sump_pump',
+        'pool_pump', or None if no clear context.
+        """
+        name_lower = circuit_name.lower()
+        metadata: dict = {}
+
+        # Hydronic / zone pumps / boiler
+        if any(kw in name_lower for kw in ("hydronic", "zone pump", "boiler", "circulator")):
+            return "hydronic", metadata
+
+        # Garage door
+        if "garage" in name_lower and ("door" in name_lower or "opener" in name_lower):
+            return "garage_door", metadata
+
+        # Lighting / outlets
+        if any(kw in name_lower for kw in ("light", "outlet", "lamp", "sconce")):
+            return "lights_outlets", metadata
+
+        # Sub panel
+        if "sub panel" in name_lower or "subpanel" in name_lower:
+            # Extract location if present
+            for loc in ("barn", "basement", "2nd floor", "second floor", "upstairs",
+                        "garage", "workshop", "shed"):
+                if loc in name_lower:
+                    metadata["location"] = loc
+                    break
+            return "sub_panel", metadata
+
+        # Specific dedicated-style circuits identified by name
+        if "ev" in name_lower and ("charger" in name_lower or "charge" in name_lower):
+            return "ev_charger", metadata
+        if "well" in name_lower and "pump" in name_lower:
+            return "well_pump", metadata
+        if any(kw in name_lower for kw in ("hvac", "compressor", "air condition", "heat pump",
+                                            "mini split", "furnace", "air handler")):
+            return "hvac", metadata
+        if "water heater" in name_lower or "hot water" in name_lower:
+            return "water_heater", metadata
+        if "range" in name_lower or "oven" in name_lower or "stove" in name_lower:
+            return "range", metadata
+        if "dryer" in name_lower:
+            return "dryer", metadata
+        if "washer" in name_lower and "dish" not in name_lower:
+            return "washer", metadata
+        if "dishwasher" in name_lower:
+            return "dishwasher", metadata
+        if "refrigerator" in name_lower or "fridge" in name_lower:
+            return "refrigerator", metadata
+        if "sump" in name_lower:
+            return "sump_pump", metadata
+        if "pool" in name_lower and "pump" in name_lower:
+            return "pool_pump", metadata
+        if "pump" in name_lower:
+            return "pump", metadata
+
+        return None, metadata
+
+    @staticmethod
+    def _format_power_label(power_w: float) -> str:
+        """Format a power level as a human-readable label like '~300W load'."""
+        if power_w >= 1000:
+            return f"~{power_w / 1000:.1f}kW load"
+        return f"~{power_w:.0f}W load"
+
     def _match_devices(
         self,
         states: list[PowerState],
-        dedicated_refs: dict[str, float],
+        circuit_name: str,
         is_dedicated: bool,
         device_type: str | None,
     ):
-        """Match each power state against signatures and dedicated references."""
-        for state in states:
-            # If this is a dedicated circuit, label with the known device
-            if is_dedicated and device_type:
+        """Match each power state using circuit name as primary signal.
+
+        Strategy:
+        1. If dedicated circuit, label all states with the known device type.
+        2. Parse circuit name for keywords that identify purpose.
+        3. If circuit purpose is clear, label states contextually.
+        4. Only fall back to signature library when name gives no context.
+        5. If still no match, label with power level description.
+        """
+        # Dedicated circuits: label everything with the known device
+        if is_dedicated and device_type:
+            for state in states:
                 state.device_name = device_type
                 state.confidence = 1.0
-                continue
+            return
 
-            best_name = None
-            best_conf = 0.0
+        context_type, metadata = self._parse_circuit_context(circuit_name)
 
-            # 1. Check against dedicated circuit reference profiles
-            for dev_type, ref_power in dedicated_refs.items():
-                if abs(state.center_w - ref_power) / max(ref_power, 1) < 0.15:
-                    conf = 0.7  # good match to a known device
-                    if conf > best_conf:
-                        best_conf = conf
-                        best_name = dev_type
+        if context_type == "hydronic":
+            self._label_hydronic_states(states)
+            return
+        elif context_type == "garage_door":
+            self._label_garage_door_states(states)
+            return
+        elif context_type == "lights_outlets":
+            self._label_lights_outlets_states(states)
+            return
+        elif context_type == "sub_panel":
+            location = metadata.get("location", "")
+            self._label_sub_panel_states(states, location)
+            return
+        elif context_type in ("ev_charger", "well_pump", "hvac", "water_heater",
+                              "range", "dryer", "washer", "dishwasher",
+                              "refrigerator", "sump_pump", "pool_pump", "pump"):
+            # Circuit name clearly identifies the device — label all states
+            label_map = {
+                "ev_charger": "EV Charger",
+                "well_pump": "Well Pump",
+                "hvac": "HVAC",
+                "water_heater": "Water Heater",
+                "range": "Oven / Range",
+                "dryer": "Dryer",
+                "washer": "Washer",
+                "dishwasher": "Dishwasher",
+                "refrigerator": "Refrigerator",
+                "sump_pump": "Sump Pump",
+                "pool_pump": "Pool Pump",
+                "pump": "Pump",
+            }
+            label = label_map[context_type]
+            for state in states:
+                state.device_name = label
+                state.confidence = 0.85
+            return
 
-            # 2. Check against signature library
+        # No clear context from circuit name — try signature library
+        for state in states:
             matches = self.signatures.match(
                 power_w=state.center_w,
                 duration_s=state.avg_duration_min * 60 if state.avg_duration_min > 0 else None,
             )
-            if matches and matches[0].confidence > best_conf:
-                best_conf = matches[0].confidence
-                best_name = matches[0].device_name
+            # Only accept high-confidence signature matches (>= 0.5)
+            if matches and matches[0].confidence >= 0.5:
+                state.device_name = matches[0].device_name
+                state.confidence = round(matches[0].confidence, 2)
+            else:
+                # Fall back to power-level description
+                state.device_name = self._format_power_label(state.center_w)
+                state.confidence = 0.0
 
-            if best_name and best_conf >= 0.3:
-                state.device_name = best_name
-                state.confidence = round(best_conf, 2)
+    def _label_hydronic_states(self, states: list[PowerState]):
+        """Label states on a hydronic zone pump circuit.
+
+        States are typically multiples of a base pump power (~250-350W),
+        representing 1, 2, 3, etc. pumps running simultaneously.
+        Small states (<100W) are control/standby power.
+        """
+        if not states:
+            return
+
+        # Separate small standby/control states from pump states
+        pump_states = [s for s in states if s.center_w >= 100]
+        standby_states = [s for s in states if s.center_w < 100]
+
+        # Label standby states
+        for state in standby_states:
+            state.device_name = "Hydronic control/standby"
+            state.confidence = 0.8
+
+        if not pump_states:
+            return
+
+        # Find the base pump power (smallest pump state)
+        base_power = pump_states[0].center_w
+
+        for state in pump_states:
+            if base_power > 0:
+                n_pumps = max(1, round(state.center_w / base_power))
+                if n_pumps == 1:
+                    state.device_name = "Zone pump (1 pump)"
+                else:
+                    state.device_name = f"Zone pumps ({n_pumps} pumps)"
+                state.confidence = 0.9
+            else:
+                state.device_name = self._format_power_label(state.center_w)
+                state.confidence = 0.0
+
+    def _label_garage_door_states(self, states: list[PowerState]):
+        """Label states on a garage door opener circuit.
+
+        Brief high-power states = motor (door opening/closing).
+        Sustained low-power states = standby/light.
+        """
+        for state in states:
+            if state.avg_duration_min < 2 and state.center_w > 200:
+                state.device_name = "Garage door motor"
+                state.confidence = 0.9
+            elif state.center_w < 100:
+                state.device_name = "Garage door standby"
+                state.confidence = 0.8
+            elif state.center_w >= 100 and state.center_w < 300:
+                state.device_name = "Garage door light"
+                state.confidence = 0.7
+            else:
+                state.device_name = "Garage door motor"
+                state.confidence = 0.7
+
+    def _label_lights_outlets_states(self, states: list[PowerState]):
+        """Label states on a lights/outlets circuit."""
+        for state in states:
+            if state.center_w < 200:
+                state.device_name = "Lighting"
+                state.confidence = 0.7
+            elif state.center_w < 500:
+                state.device_name = "Lighting / small appliance"
+                state.confidence = 0.6
+            else:
+                state.device_name = f"Outlet load ({self._format_power_label(state.center_w)})"
+                state.confidence = 0.5
+
+    def _label_sub_panel_states(self, states: list[PowerState], location: str):
+        """Label states on a sub-panel circuit."""
+        loc_prefix = f"{location.title()} " if location else ""
+        for state in states:
+            state.device_name = f"{loc_prefix}sub-panel load ({self._format_power_label(state.center_w)})"
+            state.confidence = 0.3
 
     def save_profiles(self, profiles: list[CircuitProfile]) -> int:
         """Save profiles to SpanNILM database. Returns number saved."""
