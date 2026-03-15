@@ -11,9 +11,10 @@ import DeviceCard from './components/DeviceCard'
 import ActivityFeed from './components/ActivityFeed'
 import Circuits from './pages/Circuits'
 import CircuitDetail from './pages/CircuitDetail'
+import DeviceDetail from './pages/DeviceDetail'
 import Settings from './pages/Settings'
 
-type Page = 'dashboard' | 'circuits' | 'settings' | 'detail'
+type Page = 'dashboard' | 'circuits' | 'settings' | 'detail' | 'device_detail'
 
 function formatPower(w: number): string {
   return w >= 1000 ? `${(w / 1000).toFixed(1)} kW` : `${Math.round(w)} W`
@@ -45,6 +46,7 @@ function NavLink({
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
   const [selectedCircuit, setSelectedCircuit] = useState<string | null>(null)
+  const [selectedDevice, setSelectedDevice] = useState<{ equipmentId: string; clusterId: number } | null>(null)
   const { data: dashboard, loading, error, refresh } = useDashboard()
   const { data: analysis } = useAnalysis(24)
 
@@ -94,6 +96,13 @@ export default function App() {
           <CircuitDetail
             equipmentId={selectedCircuit}
             onBack={() => { setPage('dashboard'); setSelectedCircuit(null) }}
+          />
+        )}
+        {page === 'device_detail' && selectedDevice && (
+          <DeviceDetail
+            equipmentId={selectedDevice.equipmentId}
+            clusterId={selectedDevice.clusterId}
+            onBack={() => { setPage('dashboard'); setSelectedDevice(null) }}
           />
         )}
 
@@ -153,6 +162,7 @@ export default function App() {
                   <PowerNow
                     circuits={dashboard.circuits}
                     onCircuitClick={(id) => { setSelectedCircuit(id); setPage('detail') }}
+                    onDeviceClick={(eid, cid) => { setSelectedDevice({ equipmentId: eid, clusterId: cid }); setPage('device_detail') }}
                   />
                 </section>
 

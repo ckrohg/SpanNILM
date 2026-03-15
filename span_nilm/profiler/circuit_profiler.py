@@ -637,6 +637,7 @@ class CircuitProfiler:
                     shape_devices_json = []
                     for sd in (p.shape_devices or []):
                         shape_devices_json.append({
+                            "cluster_id": int(sd.cluster_id),
                             "name": str(sd.name),
                             "template_curve": [float(v) for v in sd.template_curve],
                             "avg_power_w": float(sd.avg_power_w),

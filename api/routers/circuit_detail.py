@@ -1,5 +1,6 @@
 """Circuit detail endpoint — deep dive into a single circuit."""
 
+import json
 import logging
 import os
 from collections import defaultdict
@@ -16,6 +17,8 @@ from api.models import (
     CircuitDetailResponse,
     DailyEnergy,
     DetectedDevice,
+    DeviceDetailResponse,
+    DeviceSession,
     PowerPoint,
 )
 
@@ -192,4 +195,200 @@ def get_circuit_detail(
         energy_period_kwh=round(energy_period_kwh, 2),
         cost_period=cost_period,
         anomalies=anomalies,
+    )
+
+
+@router.get("/devices/{equipment_id}/{cluster_id}/detail", response_model=DeviceDetailResponse)
+def get_device_detail(
+    equipment_id: str,
+    cluster_id: int,
+    days: int = Query(default=30, ge=1, le=90),
+):
+    """Return detailed usage data for a single detected device on a circuit."""
+    # Load device template from circuit_profiles
+    conn = _get_spannilm_db()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT circuit_name, shape_devices FROM circuit_profiles WHERE equipment_id = %s",
+                (equipment_id,),
+            )
+            row = cur.fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        from fastapi import HTTPException
+        raise HTTPException(404, f"No profile found for {equipment_id}")
+
+    circuit_name = row["circuit_name"]
+    shape_devices = row.get("shape_devices") or []
+    if isinstance(shape_devices, str):
+        shape_devices = json.loads(shape_devices)
+
+    # Find the matching device template
+    device_template = None
+    for sd in shape_devices:
+        if sd.get("cluster_id") == cluster_id:
+            device_template = sd
+            break
+    if device_template is None and 0 <= cluster_id < len(shape_devices):
+        device_template = shape_devices[cluster_id]
+
+    if not device_template:
+        from fastapi import HTTPException
+        raise HTTPException(404, f"No device found for cluster {cluster_id}")
+
+    # Check for user-assigned name in device_labels
+    device_name = device_template.get("name", f"Device {cluster_id}")
+    try:
+        conn = _get_spannilm_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT name FROM device_labels WHERE equipment_id = %s AND cluster_id = %s",
+                    (equipment_id, cluster_id),
+                )
+                label_row = cur.fetchone()
+                if label_row:
+                    device_name = label_row[0]
+        finally:
+            conn.close()
+    except Exception:
+        pass  # table may not exist yet
+
+    template_curve = device_template.get("template_curve", [])
+    avg_power_w = device_template.get("avg_power_w", 0)
+    peak_power_w = device_template.get("peak_power_w", 0)
+    peak_hours = [int(h) for h in device_template.get("peak_hours", [])]
+
+    # Fetch aggregated power data for session extraction
+    source = get_tempiq_source()
+    now = datetime.now(timezone.utc)
+    eastern = timezone(EASTERN_OFFSET)
+    now_eastern = now.astimezone(eastern)
+    start = now_eastern.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days - 1)
+    start_utc = start.astimezone(timezone.utc)
+
+    agg = source.get_aggregated_power(start_utc, now)
+
+    sessions: list[DeviceSession] = []
+    total_energy_wh = 0.0
+
+    if not agg.empty:
+        circuit_data = agg[agg["circuit_id"] == equipment_id].copy()
+        if not circuit_data.empty:
+            circuit_data = circuit_data.sort_values("timestamp").reset_index(drop=True)
+
+            # Extract sessions and match to this device's template via cosine similarity
+            import pandas as pd
+            from scipy.interpolate import interp1d
+
+            power = circuit_data["power_w"].values.astype(float)
+            timestamps = pd.to_datetime(circuit_data["timestamp"])
+
+            ON_THRESHOLD = 15.0
+            CURVE_LENGTH = 32
+            MIN_SIMILARITY = 0.7
+
+            # Extract ON sessions
+            in_session = False
+            session_start = 0
+            raw_sessions = []
+
+            for i in range(len(power)):
+                if power[i] > ON_THRESHOLD and not in_session:
+                    in_session = True
+                    session_start = i
+                elif power[i] <= ON_THRESHOLD and in_session:
+                    in_session = False
+                    if i - session_start >= 2:
+                        raw_sessions.append((session_start, i))
+
+            if in_session and len(power) - session_start >= 2:
+                raw_sessions.append((session_start, len(power)))
+
+            # For each session, normalize curve and compare to template
+            template_arr = np.array(template_curve) if template_curve else None
+
+            for s_start, s_end in raw_sessions:
+                session_power = power[s_start:s_end]
+                session_ts = timestamps.iloc[s_start:s_end]
+
+                if len(session_power) < 2:
+                    continue
+
+                # Normalize the session curve
+                peak = np.max(session_power)
+                if peak < ON_THRESHOLD:
+                    continue
+
+                # Resample to CURVE_LENGTH points
+                x_orig = np.linspace(0, 1, len(session_power))
+                x_new = np.linspace(0, 1, CURVE_LENGTH)
+                try:
+                    f = interp1d(x_orig, session_power, kind="linear")
+                    resampled = f(x_new)
+                except Exception:
+                    continue
+
+                normalized = resampled / peak
+
+                # Cosine similarity with template
+                if template_arr is not None and len(template_arr) == CURVE_LENGTH:
+                    dot = np.dot(normalized, template_arr)
+                    norm_a = np.linalg.norm(normalized)
+                    norm_b = np.linalg.norm(template_arr)
+                    if norm_a > 0 and norm_b > 0:
+                        similarity = dot / (norm_a * norm_b)
+                    else:
+                        similarity = 0
+                else:
+                    # No template to compare, check power range match
+                    session_avg = float(np.mean(session_power))
+                    if avg_power_w > 0:
+                        power_ratio = session_avg / avg_power_w
+                        similarity = 1.0 if 0.5 < power_ratio < 2.0 else 0.0
+                    else:
+                        similarity = 0.5
+
+                if similarity < MIN_SIMILARITY:
+                    continue
+
+                # This session matches the device
+                ts_start = session_ts.iloc[0]
+                ts_end = session_ts.iloc[-1]
+                if hasattr(ts_start, "to_pydatetime"):
+                    ts_start = ts_start.to_pydatetime()
+                    ts_end = ts_end.to_pydatetime()
+
+                duration_min = (ts_end - ts_start).total_seconds() / 60
+                session_avg_power = float(np.mean(session_power))
+                session_energy_wh = session_avg_power * duration_min / 60
+
+                sessions.append(DeviceSession(
+                    start=ts_start.isoformat() if hasattr(ts_start, "isoformat") else str(ts_start),
+                    end=ts_end.isoformat() if hasattr(ts_end, "isoformat") else str(ts_end),
+                    duration_min=round(duration_min, 1),
+                    avg_power_w=round(session_avg_power, 1),
+                    energy_wh=round(session_energy_wh, 1),
+                ))
+                total_energy_wh += session_energy_wh
+
+    total_sessions = len(sessions)
+    avg_sessions_per_day = round(total_sessions / max(1, days), 2)
+
+    return DeviceDetailResponse(
+        equipment_id=equipment_id,
+        cluster_id=cluster_id,
+        name=device_name,
+        circuit_name=circuit_name,
+        template_curve=template_curve,
+        avg_power_w=round(avg_power_w, 1),
+        peak_power_w=round(peak_power_w, 1),
+        sessions=sessions,
+        total_energy_kwh=round(total_energy_wh / 1000, 3),
+        total_sessions=total_sessions,
+        avg_sessions_per_day=avg_sessions_per_day,
+        peak_hours=peak_hours,
     )

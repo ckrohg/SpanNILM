@@ -281,3 +281,76 @@ export async function fetchCircuitDetail(
   if (!res.ok) throw new Error(`Circuit detail failed: ${res.status}`)
   return res.json()
 }
+
+// Device naming API
+
+export interface DeviceSuggestion {
+  name: string
+  reasoning: string
+}
+
+export async function suggestDeviceNames(
+  equipmentId: string,
+  clusterId: number
+): Promise<DeviceSuggestion[]> {
+  const res = await fetch(
+    `${API_URL}/api/devices/${equipmentId}/${clusterId}/suggest`,
+    { method: 'POST' }
+  )
+  if (!res.ok) throw new Error(`Suggest failed: ${res.status}`)
+  const data = await res.json()
+  return data.suggestions
+}
+
+export async function setDeviceName(
+  equipmentId: string,
+  clusterId: number,
+  name: string
+): Promise<void> {
+  const res = await fetch(
+    `${API_URL}/api/devices/${equipmentId}/${clusterId}/name`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }
+  )
+  if (!res.ok) throw new Error(`Set name failed: ${res.status}`)
+}
+
+// Device detail API
+
+export interface DeviceSession {
+  start: string
+  end: string
+  duration_min: number
+  avg_power_w: number
+  energy_wh: number
+}
+
+export interface DeviceDetailData {
+  equipment_id: string
+  cluster_id: number
+  name: string
+  circuit_name: string
+  template_curve: number[]
+  avg_power_w: number
+  peak_power_w: number
+  sessions: DeviceSession[]
+  total_energy_kwh: number
+  total_sessions: number
+  avg_sessions_per_day: number
+  peak_hours: number[]
+}
+
+export async function fetchDeviceDetail(
+  equipmentId: string,
+  clusterId: number,
+  days = 30
+): Promise<DeviceDetailData> {
+  const res = await fetch(
+    `${API_URL}/api/devices/${equipmentId}/${clusterId}/detail?days=${days}`
+  )
+  if (!res.ok) throw new Error(`Device detail failed: ${res.status}`)
+  return res.json()
+}

@@ -204,3 +204,26 @@ class CircuitDetailResponse(BaseModel):
     energy_period_kwh: float
     cost_period: float
     anomalies: list[Anomaly] = []
+
+
+class DeviceSession(BaseModel):
+    start: str
+    end: str
+    duration_min: float
+    avg_power_w: float
+    energy_wh: float
+
+
+class DeviceDetailResponse(BaseModel):
+    equipment_id: str
+    cluster_id: int
+    name: str
+    circuit_name: str
+    template_curve: list[float]
+    avg_power_w: float
+    peak_power_w: float
+    sessions: list[DeviceSession]
+    total_energy_kwh: float
+    total_sessions: int
+    avg_sessions_per_day: float
+    peak_hours: list[int]
