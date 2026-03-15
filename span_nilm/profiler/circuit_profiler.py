@@ -18,6 +18,7 @@ import psycopg2.extras
 
 from span_nilm.collector.sources.tempiq_source import TempIQSource
 from span_nilm.models.signatures import SignatureLibrary
+from span_nilm.profiler.shape_detector import ShapeDetector
 from span_nilm.profiler.temporal_analyzer import TemporalAnalyzer, TemporalProfile
 
 logger = logging.getLogger("span_nilm.profiler")
@@ -51,6 +52,7 @@ class CircuitProfile:
     baseload_w: float = 0.0
     temporal: Optional[TemporalProfile] = None
     correlations: list[tuple[str, str, float]] = field(default_factory=list)  # (equip_id, name, score)
+    shape_devices: list = field(default_factory=list)  # DeviceTemplate objects from shape detection
 
 
 class CircuitProfiler:
@@ -74,13 +76,18 @@ class CircuitProfiler:
         now = datetime.now(timezone.utc)
         start = now - timedelta(days=self.data_days)
 
+        # Fetch both raw readings (for histogram/temporal) and aggregated (for shape detection)
         logger.info("Fetching %d days of readings (%s to %s)", self.data_days, start, now)
         df = self.source.get_readings(start, now)
         if df.empty:
             logger.warning("No readings returned")
             return []
 
-        logger.info("Got %d readings across %d circuits", len(df), df["circuit_id"].nunique())
+        logger.info("Got %d raw readings across %d circuits", len(df), df["circuit_id"].nunique())
+
+        # Fetch 10-min aggregated data for shape detection (much better resolution)
+        agg_df = self.source.get_aggregated_power(start, now)
+        logger.info("Got %d aggregated power readings", len(agg_df))
 
         # Load circuit configs from SpanNILM DB
         configs = self._load_circuit_configs()
@@ -102,9 +109,24 @@ class CircuitProfiler:
                 cid, circuit_name, group, is_dedicated, device_type
             )
 
-            # Add temporal analysis
+            # Add temporal analysis and shape detection for shared circuits
             if not is_dedicated:
-                profile.temporal = self.temporal.analyze_circuit(cid, circuit_name, group)
+                # Use aggregated data for shape detection (10-min resolution)
+                agg_group = agg_df[agg_df["circuit_id"] == cid].sort_values("timestamp").reset_index(drop=True)
+                shape_data = agg_group if not agg_group.empty else group
+
+                profile.temporal = self.temporal.analyze_circuit(cid, circuit_name, shape_data)
+                # Run shape-based device detection on aggregated data
+                try:
+                    shape_det = ShapeDetector()
+                    profile.shape_devices = shape_det.detect_devices(circuit_name, shape_data)
+                    if profile.shape_devices:
+                        logger.info(
+                            "Shape detector found %d devices on %s",
+                            len(profile.shape_devices), circuit_name,
+                        )
+                except Exception as e:
+                    logger.warning("Shape detection failed on %s: %s", circuit_name, e)
 
             profiles.append(profile)
 
@@ -551,9 +573,16 @@ class CircuitProfiler:
     def save_profiles(self, profiles: list[CircuitProfile]) -> int:
         """Save profiles to SpanNILM database. Returns number saved."""
         import json
+        from dataclasses import asdict as _asdict
         conn = psycopg2.connect(self.db_url)
         try:
             with conn.cursor() as cur:
+                # Ensure shape_devices column exists
+                cur.execute(
+                    "ALTER TABLE circuit_profiles ADD COLUMN IF NOT EXISTS shape_devices JSONB DEFAULT '[]'"
+                )
+                conn.commit()
+
                 for p in profiles:
                     states_json = [
                         {
@@ -604,13 +633,33 @@ class CircuitProfiler:
                         for cid, name, score in p.correlations
                     ]
 
+                    # Serialize shape devices (cast numpy types for JSON)
+                    shape_devices_json = []
+                    for sd in (p.shape_devices or []):
+                        shape_devices_json.append({
+                            "name": str(sd.name),
+                            "template_curve": [float(v) for v in sd.template_curve],
+                            "avg_power_w": float(sd.avg_power_w),
+                            "peak_power_w": float(sd.peak_power_w),
+                            "avg_duration_min": float(sd.avg_duration_min),
+                            "session_count": int(sd.session_count),
+                            "sessions_per_day": float(sd.sessions_per_day),
+                            "peak_hours": [int(h) for h in sd.peak_hours],
+                            "confidence": float(sd.confidence),
+                            "num_phases": int(sd.num_phases),
+                            "has_startup_surge": bool(sd.has_startup_surge),
+                            "is_cycling": bool(sd.is_cycling),
+                            "duty_cycle": float(sd.duty_cycle),
+                            "energy_per_session_wh": float(sd.energy_per_session_wh),
+                        })
+
                     cur.execute(
                         """
                         INSERT INTO circuit_profiles
                             (equipment_id, circuit_name, is_dedicated, dedicated_device_type,
                              states, total_readings, active_pct, baseload_w, data_days,
-                             temporal, correlations)
-                        VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
+                             temporal, correlations, shape_devices)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb)
                         ON CONFLICT (equipment_id)
                         DO UPDATE SET
                             circuit_name = EXCLUDED.circuit_name,
@@ -623,7 +672,8 @@ class CircuitProfiler:
                             profiled_at = now(),
                             data_days = EXCLUDED.data_days,
                             temporal = EXCLUDED.temporal,
-                            correlations = EXCLUDED.correlations
+                            correlations = EXCLUDED.correlations,
+                            shape_devices = EXCLUDED.shape_devices
                         """,
                         (
                             p.equipment_id,
@@ -637,6 +687,7 @@ class CircuitProfiler:
                             self.data_days,
                             json.dumps(temporal_json),
                             json.dumps(corr_json),
+                            json.dumps(shape_devices_json),
                         ),
                     )
                 conn.commit()

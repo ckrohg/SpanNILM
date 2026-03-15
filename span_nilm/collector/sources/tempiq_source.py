@@ -79,6 +79,39 @@ class TempIQSource(DataSource):
         """Return list of available SPAN circuits from TempIQ's equipment table."""
         return self._query(CIRCUITS_QUERY, (self.property_id,))
 
+    def get_aggregated_power(self, start: datetime, end: datetime) -> pd.DataFrame:
+        """Fetch 10-minute aggregated power data from span_circuit_aggregations.
+
+        This table has MUCH better resolution than raw readings — it provides
+        actual avg_power_w for each 10-minute bucket from the Span Cloud API.
+        285K+ rows covering Nov 2025 - present.
+
+        Returns DataFrame with columns: timestamp, circuit_id, circuit_name, power_w
+        """
+        query = """
+        SELECT
+            a.bucket_start AS timestamp,
+            a.equipment_id,
+            e.name AS circuit_name,
+            a.avg_power_w::float AS power_w
+        FROM span_circuit_aggregations a
+        JOIN equipment e ON a.equipment_id = e.id
+        WHERE a.property_id = %s
+          AND a.bucket_start >= %s
+          AND a.bucket_start < %s
+          AND a.avg_power_w IS NOT NULL
+        ORDER BY a.equipment_id, a.bucket_start
+        """
+        rows = self._query(query, (self.property_id, start, end))
+        if not rows:
+            logger.warning("No aggregated data for %s to %s", start, end)
+            return pd.DataFrame(columns=["timestamp", "circuit_id", "circuit_name", "power_w"])
+
+        df = pd.DataFrame(rows)
+        df.rename(columns={"equipment_id": "circuit_id"}, inplace=True)
+        logger.info("Fetched %d aggregated power readings", len(df))
+        return df
+
     def get_readings(self, start: datetime, end: datetime) -> pd.DataFrame:
         """Fetch circuit readings and derive power from energy counters.
 

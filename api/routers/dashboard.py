@@ -121,14 +121,35 @@ def get_dashboard(
 
             if not is_ded:
                 devices = []
-                for s in (row.get("states") or []):
-                    if s.get("device_name"):
+                shape_devs = row.get("shape_devices") or []
+                if shape_devs:
+                    # Prefer shape-based detection for shared circuits
+                    for sd in shape_devs:
+                        sessions_per_day = sd.get("sessions_per_day", 0)
+                        avg_dur = sd.get("avg_duration_min", 0)
+                        pct = sessions_per_day * avg_dur / 1440 * 100  # % of day
                         devices.append(DetectedDevice(
-                            name=s["device_name"],
-                            power_w=s["center_w"],
-                            confidence=s.get("confidence", 0),
-                            pct_of_time=s.get("pct_of_time", 0),
+                            name=sd["name"],
+                            power_w=sd.get("avg_power_w", 0),
+                            confidence=sd.get("confidence", 0),
+                            pct_of_time=round(pct, 2),
+                            template_curve=sd.get("template_curve"),
+                            session_count=sd.get("session_count", 0),
+                            avg_duration_min=sd.get("avg_duration_min", 0),
+                            is_cycling=sd.get("is_cycling", False),
+                            num_phases=sd.get("num_phases", 1),
+                            energy_per_session_wh=sd.get("energy_per_session_wh", 0),
                         ))
+                else:
+                    # Fall back to histogram-based states
+                    for s in (row.get("states") or []):
+                        if s.get("device_name"):
+                            devices.append(DetectedDevice(
+                                name=s["device_name"],
+                                power_w=s["center_w"],
+                                confidence=s.get("confidence", 0),
+                                pct_of_time=s.get("pct_of_time", 0),
+                            ))
                 if devices:
                     profile_devices[eid] = devices
 

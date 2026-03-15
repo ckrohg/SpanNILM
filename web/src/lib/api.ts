@@ -117,6 +117,12 @@ export interface DetectedDevice {
   power_w: number
   confidence: number
   pct_of_time: number
+  template_curve: number[] | null
+  session_count: number
+  avg_duration_min: number
+  is_cycling: boolean
+  num_phases: number
+  energy_per_session_wh: number
 }
 
 export interface TemporalInfo {

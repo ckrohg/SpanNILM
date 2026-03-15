@@ -6,6 +6,34 @@ function formatPower(w: number): string {
   return `${Math.round(w)} W`
 }
 
+function formatDuration(min: number): string {
+  if (min >= 60) return `${(min / 60).toFixed(1)}h`
+  return `${Math.round(min)}min`
+}
+
+function MiniSparkline({ curve }: { curve: number[] }) {
+  const w = 80
+  const h = 20
+  const points = curve
+    .map((v, i) => {
+      const x = (i / (curve.length - 1)) * w
+      const y = h - v * (h - 2) - 1
+      return `${x},${y}`
+    })
+    .join(' ')
+  return (
+    <svg width={w} height={h} className="flex-shrink-0">
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        className="text-emerald-500/70"
+      />
+    </svg>
+  )
+}
+
 export default function PowerNow({ circuits }: { circuits: CircuitPower[] }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const sorted = [...circuits].sort((a, b) => b.energy_today_kwh - a.energy_today_kwh)
@@ -83,20 +111,38 @@ export default function PowerNow({ circuits }: { circuits: CircuitPower[] }) {
                 {devices.length > 0 && (
                   <div className="px-4 py-2 space-y-1">
                     <div className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5">
-                      Detected Power States
+                      Detected Devices
                     </div>
                     {devices.map((d, i) => {
                       const conf = d.confidence
                       const confColor = conf >= 0.7 ? 'text-green-400' : conf >= 0.4 ? 'text-yellow-400' : 'text-gray-500'
+                      const hasShapeData = d.template_curve && d.template_curve.length > 0
                       return (
-                        <div key={i} className="flex items-center gap-3 pl-5 py-1 text-xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-gray-600" />
-                          <span className="text-gray-300 flex-1">
-                            {d.name.replace(/_/g, ' ')}
-                          </span>
-                          <span className="text-gray-500 font-mono">~{formatPower(d.power_w)}</span>
-                          <span className="text-gray-600">{d.pct_of_time.toFixed(1)}% of time</span>
-                          <span className={`font-mono ${confColor}`}>{Math.round(conf * 100)}%</span>
+                        <div key={i} className="pl-5 py-1.5 text-xs">
+                          <div className="flex items-center gap-3">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-600 flex-shrink-0" />
+                            {hasShapeData && <MiniSparkline curve={d.template_curve!} />}
+                            <span className="text-gray-300 flex-1">
+                              {d.name.replace(/_/g, ' ')}
+                            </span>
+                            <span className="text-gray-500 font-mono">~{formatPower(d.power_w)}</span>
+                            <span className={`font-mono ${confColor}`}>{Math.round(conf * 100)}%</span>
+                          </div>
+                          {hasShapeData && (
+                            <div className="flex items-center gap-3 pl-5 mt-0.5 text-[11px] text-gray-500">
+                              <span>{d.session_count} sessions</span>
+                              <span>{formatDuration(d.avg_duration_min)} avg</span>
+                              <span>{d.energy_per_session_wh.toFixed(0)} Wh/session</span>
+                              {d.is_cycling && (
+                                <span className="px-1.5 py-0 rounded bg-purple-900/50 text-purple-300 border border-purple-800/50">
+                                  cycling
+                                </span>
+                              )}
+                              {d.num_phases > 2 && (
+                                <span className="text-gray-600">{d.num_phases}-phase</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )
                     })}

@@ -90,6 +90,12 @@ class DetectedDevice(BaseModel):
     power_w: float
     confidence: float
     pct_of_time: float
+    template_curve: list[float] | None = None  # 32-point normalized power shape
+    session_count: int = 0
+    avg_duration_min: float = 0
+    is_cycling: bool = False
+    num_phases: int = 1
+    energy_per_session_wh: float = 0
 
 
 class CorrelationInfo(BaseModel):
