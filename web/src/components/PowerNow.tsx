@@ -286,12 +286,11 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                         const deviceKey = `${circuit.equipment_id}-${i}`
                         const displayName = renamedDevices[deviceKey] || d.name
                         return (
-                          <div key={i} className="pl-5 py-1.5 text-xs">
-                            <div className="flex items-center gap-3">
-                              <span className="w-1.5 h-1.5 rounded-full bg-gray-600 flex-shrink-0" />
+                          <div key={i} className="pl-3 sm:pl-5 py-2 text-xs border-b border-gray-800/30 last:border-0">
+                            <div className="flex items-center gap-2 sm:gap-3">
                               {hasShapeData && <MiniSparkline curve={d.template_curve!} />}
                               <span
-                                className={`text-gray-300 flex-1 ${onDeviceClick ? 'cursor-pointer hover:text-emerald-300 transition-colors' : ''}`}
+                                className={`text-gray-200 font-medium flex-1 ${onDeviceClick ? 'cursor-pointer hover:text-emerald-300 transition-colors' : ''}`}
                                 onClick={(e) => {
                                   if (onDeviceClick) {
                                     e.stopPropagation()
@@ -301,7 +300,25 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                               >
                                 {displayName.replace(/_/g, ' ')}
                               </span>
-                              {/* Rename button */}
+                              <span className="text-gray-500 font-mono">~{formatPower(d.power_w)}</span>
+                            </div>
+                            {/* Feedback buttons */}
+                            <div className="flex items-center gap-2 mt-1.5 pl-0 sm:pl-[84px]">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  // Confirm = save current name as user-confirmed
+                                  setDeviceName(circuit.equipment_id, i, displayName)
+                                    .then(() => {
+                                      setRenamedDevices(prev => ({ ...prev, [deviceKey]: displayName + ' ✓' }))
+                                      setTimeout(() => setRenamedDevices(prev => ({ ...prev, [deviceKey]: displayName })), 2000)
+                                    })
+                                }}
+                                className="px-2 py-0.5 rounded text-[10px] bg-green-900/30 text-green-400 border border-green-800/50 hover:bg-green-800/40 transition-colors"
+                                title="Confirm this is correct"
+                              >
+                                ✓ Correct
+                              </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
@@ -311,15 +328,22 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                                     name: displayName,
                                   })
                                 }}
-                                className="p-1 text-gray-600 hover:text-purple-400 transition-colors"
-                                title="Name this device"
+                                className="px-2 py-0.5 rounded text-[10px] bg-yellow-900/30 text-yellow-400 border border-yellow-800/50 hover:bg-yellow-800/40 transition-colors"
+                                title="This is wrong — rename it"
                               >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
+                                ✗ Wrong
                               </button>
-                              <span className="text-gray-500 font-mono">~{formatPower(d.power_w)}</span>
-                              <span className={`font-mono ${confColor}`}>{Math.round(conf * 100)}%</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setDeviceName(circuit.equipment_id, i, 'Unknown device')
+                                    .then(() => setRenamedDevices(prev => ({ ...prev, [deviceKey]: 'Unknown device' })))
+                                }}
+                                className="px-2 py-0.5 rounded text-[10px] bg-gray-800/50 text-gray-500 border border-gray-700/50 hover:bg-gray-700/40 transition-colors"
+                                title="Not a real device"
+                              >
+                                Not a device
+                              </button>
                             </div>
                             {hasShapeData && (
                               <div className="flex items-center gap-3 pl-5 mt-0.5 text-[11px] text-gray-500">
