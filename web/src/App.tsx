@@ -223,34 +223,11 @@ export default function App() {
 
             {dashboard && (
               <>
-                {/* Always On — full width, prominent */}
-                <section>
-                  <h2 className="text-sm font-medium text-gray-400 mb-2">
-                    Always-On Loads
-                  </h2>
-                  <AlwaysOnCard
-                    alwaysOnW={dashboard.always_on_w}
-                    totalPowerW={dashboard.total_power_w}
-                    totalEnergyTodayKwh={dashboard.total_energy_today_kwh}
-                    circuits={dashboard.circuits}
-                    electricityRate={dashboard.electricity_rate}
-                  />
-                </section>
-
-                {/* Efficiency Score */}
-                <EfficiencyScore data={dashboard} />
-
-                {/* Power Now — where is my power going? */}
-                <section>
-                  <h2 className="text-sm font-medium text-gray-400 mb-2">
-                    Power Now
-                  </h2>
-                  <PowerNow
-                    circuits={dashboard.circuits}
-                    onCircuitClick={(id) => { setSelectedCircuit(id); setPage('detail') }}
-                    onDeviceClick={(eid, cid) => { setSelectedDevice({ equipmentId: eid, clusterId: cid }); setPage('device_detail') }}
-                  />
-                </section>
+                {/* ═══════════════════════════════════════════
+                    SECTION 1: OVERVIEW (top of page)
+                    Timeline, bill, trends, energy, costs
+                    All respond to the date range picker
+                    ═══════════════════════════════════════════ */}
 
                 {/* Stacked timeline */}
                 <section>
@@ -278,11 +255,9 @@ export default function App() {
 
                 {/* Energy summary */}
                 <section>
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-                    <h2 className="text-sm font-medium text-gray-400">
-                      Energy Usage — {PERIOD_LABELS[dateRange]}
-                    </h2>
-                  </div>
+                  <h2 className="text-sm font-medium text-gray-400 mb-2">
+                    Energy Usage — {PERIOD_LABELS[dateRange]}
+                  </h2>
                   <EnergySummary
                     circuits={dashboard.circuits}
                     totalEnergyToday={dashboard.total_energy_today_kwh}
@@ -301,28 +276,68 @@ export default function App() {
                   )}
                 </section>
 
-                {/* Weekly Digest */}
+                {/* ═══════════════════════════════════════════
+                    SECTION 2: CIRCUITS & DEVICES
+                    Per-circuit breakdown, always-on, efficiency
+                    ═══════════════════════════════════════════ */}
+
+                <div className="border-t border-gray-800 pt-6 mt-2">
+                  <h2 className="text-base font-semibold text-gray-300 mb-4">Circuits & Devices</h2>
+                </div>
+
+                {/* Power Now — per-circuit breakdown */}
                 <section>
                   <h2 className="text-sm font-medium text-gray-400 mb-2">
-                    Weekly Digest
+                    Power Now
                   </h2>
+                  <PowerNow
+                    circuits={dashboard.circuits}
+                    onCircuitClick={(id) => { setSelectedCircuit(id); setPage('detail') }}
+                    onDeviceClick={(eid, cid) => { setSelectedDevice({ equipmentId: eid, clusterId: cid }); setPage('device_detail') }}
+                  />
+                </section>
+
+                {/* Always On */}
+                <section>
+                  <h2 className="text-sm font-medium text-gray-400 mb-2">
+                    Always-On Loads
+                  </h2>
+                  <AlwaysOnCard
+                    alwaysOnW={dashboard.always_on_w}
+                    totalPowerW={dashboard.total_power_w}
+                    totalEnergyTodayKwh={dashboard.total_energy_today_kwh}
+                    circuits={dashboard.circuits}
+                    electricityRate={dashboard.electricity_rate}
+                  />
+                </section>
+
+                {/* Efficiency Score + Weekly Digest */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                  <EfficiencyScore data={dashboard} />
                   <WeeklyDigest data={dashboard} />
-                </section>
+                </div>
 
-                {/* Annual Forecast */}
-                <section>
-                  <h2 className="text-sm font-medium text-gray-400 mb-2">
-                    Annual Energy Forecast
-                  </h2>
-                  <AnnualForecast />
-                </section>
+                {/* ═══════════════════════════════════════════
+                    SECTION 3: SOLAR & FORECAST
+                    Solar readiness, annual forecast
+                    ═══════════════════════════════════════════ */}
 
-                {/* Solar Readiness */}
+                <div className="border-t border-gray-800 pt-6 mt-2">
+                  <h2 className="text-base font-semibold text-gray-300 mb-4">Solar & Energy Forecast</h2>
+                </div>
+
                 <section>
                   <h2 className="text-sm font-medium text-gray-400 mb-2">
                     Solar Readiness
                   </h2>
                   <SolarAnalysis data={dashboard} />
+                </section>
+
+                <section>
+                  <h2 className="text-sm font-medium text-gray-400 mb-2">
+                    Annual Energy Forecast
+                  </h2>
+                  <AnnualForecast />
                 </section>
 
               </>
