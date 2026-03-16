@@ -222,8 +222,11 @@ export default function App() {
 
             {dashboard && (
               <>
-                {/* Always On + Efficiency Score */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                {/* Always On — full width, prominent */}
+                <section>
+                  <h2 className="text-sm font-medium text-gray-400 mb-2">
+                    Always-On Loads
+                  </h2>
                   <AlwaysOnCard
                     alwaysOnW={dashboard.always_on_w}
                     totalPowerW={dashboard.total_power_w}
@@ -231,8 +234,10 @@ export default function App() {
                     circuits={dashboard.circuits}
                     electricityRate={dashboard.electricity_rate}
                   />
-                  <EfficiencyScore data={dashboard} />
-                </div>
+                </section>
+
+                {/* Efficiency Score */}
+                <EfficiencyScore data={dashboard} />
 
                 {/* Power Now — where is my power going? */}
                 <section>

@@ -9,6 +9,50 @@ interface Props {
 const SOLAR_START_HOUR = 10
 const SOLAR_END_HOUR = 15
 
+// Monthly solar production factors for New England (~42°N latitude)
+// Based on average peak sun hours and weather patterns
+// Source: NREL PVWatts / typical Boston-area data
+// Values represent fraction of annual production per month
+const MONTHLY_SOLAR_FACTORS = [
+  0.055, // Jan - short days, low sun angle, snow
+  0.065, // Feb - slightly longer days
+  0.085, // Mar - equinox approaching
+  0.095, // Apr - good production
+  0.105, // May - near peak, long days
+  0.115, // Jun - peak production, summer solstice
+  0.115, // Jul - peak, but haze/humidity
+  0.105, // Aug - still strong
+  0.090, // Sep - equinox, shorter days
+  0.075, // Oct - declining
+  0.055, // Nov - short days, overcast
+  0.045, // Dec - winter solstice, shortest days
+] // sums to ~1.005, close enough to 1.0
+
+// Average sun hours per day by month (New England)
+const MONTHLY_SUN_HOURS = [
+  3.0, // Jan
+  3.8, // Feb
+  4.5, // Mar
+  5.2, // Apr
+  5.8, // May
+  6.2, // Jun
+  6.1, // Jul
+  5.6, // Aug
+  5.0, // Sep
+  4.0, // Oct
+  3.2, // Nov
+  2.7, // Dec
+]
+
+function getMonthlyProduction(annualKwh: number, month: number): number {
+  return annualKwh * MONTHLY_SOLAR_FACTORS[month]
+}
+
+function getDailyProduction(annualKwh: number, month: number): number {
+  const daysInMonth = new Date(new Date().getFullYear(), month + 1, 0).getDate()
+  return getMonthlyProduction(annualKwh, month) / daysInMonth
+}
+
 export default function SolarAnalysis({ data }: Props) {
   const [solarPayment, setSolarPayment] = useState(0)
   const [solarAnnualKwh, setSolarAnnualKwh] = useState(0)
@@ -70,9 +114,12 @@ export default function SolarAnalysis({ data }: Props) {
 
   // If user has a solar quote, show the real financials
   if (hasQuote) {
-    const solarDailyKwh = solarAnnualKwh / 365
-    const solarMonthlyKwh = solarAnnualKwh / 12
+    const currentMonth = new Date().getMonth()
+    const solarDailyKwh = getDailyProduction(solarAnnualKwh, currentMonth)
+    const solarMonthlyKwh = getMonthlyProduction(solarAnnualKwh, currentMonth)
+    const solarDailyAvgAnnual = solarAnnualKwh / 365
     const annualPayment = solarPayment * 12
+    const sunHoursToday = MONTHLY_SUN_HOURS[currentMonth]
 
     // How much of the solar production offsets usage?
     let annualSavingsFromSolar: number
@@ -177,14 +224,46 @@ export default function SolarAnalysis({ data }: Props) {
           </div>
         </div>
 
+        {/* Monthly production chart */}
+        <div className="mt-4">
+          <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">
+            Estimated Monthly Solar Production
+          </div>
+          <div className="flex items-end gap-1 h-16">
+            {MONTHLY_SOLAR_FACTORS.map((factor, i) => {
+              const monthKwh = solarAnnualKwh * factor
+              const maxMonth = Math.max(...MONTHLY_SOLAR_FACTORS) * solarAnnualKwh
+              const heightPct = maxMonth > 0 ? (monthKwh / maxMonth) * 100 : 0
+              const isCurrent = i === currentMonth
+              const monthLabels = ['J','F','M','A','M','J','J','A','S','O','N','D']
+              return (
+                <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                  <div
+                    className={`w-full rounded-t transition-all ${isCurrent ? 'bg-yellow-400' : 'bg-yellow-600/40'}`}
+                    style={{ height: `${heightPct}%`, minHeight: '2px' }}
+                  />
+                  <span className={`text-[8px] ${isCurrent ? 'text-yellow-400 font-bold' : 'text-gray-600'}`}>
+                    {monthLabels[i]}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+            <span>This month: {solarMonthlyKwh.toFixed(0)} kWh ({solarDailyKwh.toFixed(1)}/day)</span>
+            <span>~{sunHoursToday.toFixed(1)} peak sun hrs/day</span>
+          </div>
+        </div>
+
         {/* Insight */}
         <div className="mt-4 bg-gray-800/30 rounded-lg px-4 py-3 border border-gray-800/50">
           <p className="text-xs text-gray-400 leading-relaxed">
             {netMonthlySavings >= 0 ? (
               <>
                 This solar quote would save you <span className="text-green-400 font-medium">${netAnnualSavings.toFixed(0)}/year</span>.
+                {' '}This month the system would produce ~{solarMonthlyKwh.toFixed(0)} kWh ({solarDailyKwh.toFixed(1)}/day with ~{sunHoursToday.toFixed(1)} peak sun hours).
                 {solarOffsetPct >= 100 && netMetering && ' Your system produces more than you use — with net metering, your electricity bill drops to near zero.'}
-                {solarOffsetPct < 100 && ` The system covers ${solarOffsetPct}% of your usage. You'd still buy ${remainingGridKwh.toFixed(0)} kWh/yr from the grid.`}
+                {solarOffsetPct < 100 && ` The system covers ${solarOffsetPct}% of your usage annually. Production peaks in June-July (${(solarAnnualKwh * 0.115 / 30).toFixed(1)} kWh/day) and dips in December (${(solarAnnualKwh * 0.045 / 31).toFixed(1)} kWh/day).`}
               </>
             ) : (
               <>
