@@ -79,6 +79,102 @@ class ShapeDetector:
         self.min_session_min = min_session_min
         self.on_threshold_w = on_threshold_w
 
+    def detect_devices_subpanel(
+        self, circuit_name: str, df: pd.DataFrame
+    ) -> list[DeviceTemplate]:
+        """Run sub-panel decomposition, then wrap results as DeviceTemplates.
+
+        Uses SubpanelDecomposer to find step-change-based device components,
+        then converts each DecomposedDevice into a DeviceTemplate for
+        compatibility with the rest of the pipeline. Falls back to regular
+        detect_devices() if decomposition finds < 2 devices.
+
+        Args:
+            circuit_name: Name of the circuit
+            df: DataFrame with columns: timestamp, power_w
+
+        Returns:
+            List of DeviceTemplate objects
+        """
+        from span_nilm.profiler.subpanel_decomposer import SubpanelDecomposer
+
+        decomposer = SubpanelDecomposer()
+        decomposed = decomposer.decompose(df)
+
+        if len(decomposed) < 2:
+            logger.info(
+                "Sub-panel decomposition found < 2 devices on %s, falling back to regular detection",
+                circuit_name,
+            )
+            return self.detect_devices(circuit_name, df)
+
+        logger.info(
+            "Sub-panel decomposition found %d devices on %s",
+            len(decomposed), circuit_name,
+        )
+
+        # Calculate total days for sessions_per_day context
+        timestamps = pd.to_datetime(df["timestamp"])
+        if len(timestamps) >= 2:
+            total_days = max(1, (timestamps.iloc[-1] - timestamps.iloc[0]).days)
+        else:
+            total_days = 1
+
+        devices: list[DeviceTemplate] = []
+        for i, dd in enumerate(decomposed):
+            # Infer a name from power level and circuit context
+            if dd.is_baseload:
+                name = f"Always-on baseload ({dd.power_w:.0f}W)"
+            else:
+                name = self._infer_name(
+                    avg_power=dd.power_w,
+                    peak_power=dd.power_w * 1.1,  # Approximate peak
+                    avg_duration=dd.avg_duration_min,
+                    num_phases=1,
+                    has_surge=False,
+                    is_cycling=dd.sessions_per_day > 4,
+                    circuit_name=circuit_name,
+                )
+
+            # Build a flat template curve (step-change devices are ~constant power)
+            template_curve = [0.8] * self.curve_length
+
+            confidence = 0.5
+            # Higher confidence with more observations
+            confidence = min(0.9, confidence + min(0.3, dd.run_count / 30))
+
+            devices.append(DeviceTemplate(
+                cluster_id=i,
+                name=name,
+                template_curve=template_curve,
+                avg_power_w=round(dd.power_w, 1),
+                peak_power_w=round(dd.power_w * 1.1, 1),
+                min_power_w=round(dd.power_w * 0.9, 1),
+                avg_duration_min=round(dd.avg_duration_min, 1),
+                std_duration_min=round(
+                    (dd.max_duration_min - dd.min_duration_min) / 2, 1
+                ) if dd.max_duration_min > dd.min_duration_min else 0.0,
+                session_count=dd.run_count,
+                sessions_per_day=dd.sessions_per_day,
+                peak_hours=dd.peak_hours,
+                confidence=round(confidence, 2),
+                num_phases=1,
+                has_startup_surge=False,
+                is_cycling=dd.sessions_per_day > 4,
+                duty_cycle=0.0,
+                ramp_up_rate=0.0,
+                energy_per_session_wh=round(
+                    dd.total_energy_wh / max(dd.run_count, 1), 1
+                ),
+            ))
+
+        # Sort by energy contribution
+        devices.sort(
+            key=lambda d: d.session_count * d.energy_per_session_wh,
+            reverse=True,
+        )
+        return devices
+
     def detect_devices(
         self, circuit_name: str, df: pd.DataFrame
     ) -> list[DeviceTemplate]:

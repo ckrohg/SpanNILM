@@ -53,6 +53,7 @@ class CircuitProfile:
     temporal: Optional[TemporalProfile] = None
     correlations: list[tuple[str, str, float]] = field(default_factory=list)  # (equip_id, name, score)
     shape_devices: list = field(default_factory=list)  # DeviceTemplate objects from shape detection
+    decomposed_devices: list = field(default_factory=list)  # DecomposedDevice dicts from sub-panel decomposition
 
 
 class CircuitProfiler:
@@ -117,9 +118,32 @@ class CircuitProfiler:
 
                 profile.temporal = self.temporal.analyze_circuit(cid, circuit_name, shape_data)
                 # Run shape-based device detection on aggregated data
+                # Use sub-panel decomposition for sub-panel circuits
+                is_subpanel = any(
+                    kw in circuit_name.lower()
+                    for kw in ("sub panel", "subpanel", "sub-panel")
+                )
                 try:
                     shape_det = ShapeDetector()
-                    profile.shape_devices = shape_det.detect_devices(circuit_name, shape_data)
+                    if is_subpanel:
+                        logger.info(
+                            "Using sub-panel decomposition for %s", circuit_name
+                        )
+                        # Run decomposition and store raw results
+                        from span_nilm.profiler.subpanel_decomposer import SubpanelDecomposer
+                        decomposer = SubpanelDecomposer()
+                        decomposed = decomposer.decompose(shape_data)
+                        if decomposed:
+                            from dataclasses import asdict as _asdict_dd
+                            profile.decomposed_devices = [
+                                _asdict_dd(dd) for dd in decomposed
+                            ]
+                        # Get DeviceTemplates via the sub-panel pathway
+                        profile.shape_devices = shape_det.detect_devices_subpanel(
+                            circuit_name, shape_data
+                        )
+                    else:
+                        profile.shape_devices = shape_det.detect_devices(circuit_name, shape_data)
                     if profile.shape_devices:
                         logger.info(
                             "Shape detector found %d devices on %s",
@@ -857,9 +881,12 @@ class CircuitProfiler:
         conn = psycopg2.connect(self.db_url)
         try:
             with conn.cursor() as cur:
-                # Ensure shape_devices column exists
+                # Ensure shape_devices and decomposed_devices columns exist
                 cur.execute(
                     "ALTER TABLE circuit_profiles ADD COLUMN IF NOT EXISTS shape_devices JSONB DEFAULT '[]'"
+                )
+                cur.execute(
+                    "ALTER TABLE circuit_profiles ADD COLUMN IF NOT EXISTS decomposed_devices JSONB DEFAULT '[]'"
                 )
                 conn.commit()
 
@@ -934,13 +961,30 @@ class CircuitProfiler:
                             "energy_per_session_wh": float(sd.energy_per_session_wh),
                         })
 
+                    # Serialize decomposed devices (sub-panel raw decomposition)
+                    decomposed_json = []
+                    for dd in (p.decomposed_devices or []):
+                        # dd is already a dict from asdict()
+                        decomposed_json.append({
+                            "power_w": float(dd["power_w"]),
+                            "run_count": int(dd["run_count"]),
+                            "avg_duration_min": float(dd["avg_duration_min"]),
+                            "total_energy_wh": float(dd["total_energy_wh"]),
+                            "peak_hours": [int(h) for h in dd["peak_hours"]],
+                            "is_baseload": bool(dd["is_baseload"]),
+                            "sessions_per_day": float(dd["sessions_per_day"]),
+                            "power_std_w": float(dd["power_std_w"]),
+                            "min_duration_min": float(dd["min_duration_min"]),
+                            "max_duration_min": float(dd["max_duration_min"]),
+                        })
+
                     cur.execute(
                         """
                         INSERT INTO circuit_profiles
                             (equipment_id, circuit_name, is_dedicated, dedicated_device_type,
                              states, total_readings, active_pct, baseload_w, data_days,
-                             temporal, correlations, shape_devices)
-                        VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb)
+                             temporal, correlations, shape_devices, decomposed_devices)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb)
                         ON CONFLICT (equipment_id)
                         DO UPDATE SET
                             circuit_name = EXCLUDED.circuit_name,
@@ -954,7 +998,8 @@ class CircuitProfiler:
                             data_days = EXCLUDED.data_days,
                             temporal = EXCLUDED.temporal,
                             correlations = EXCLUDED.correlations,
-                            shape_devices = EXCLUDED.shape_devices
+                            shape_devices = EXCLUDED.shape_devices,
+                            decomposed_devices = EXCLUDED.decomposed_devices
                         """,
                         (
                             p.equipment_id,
@@ -969,6 +1014,7 @@ class CircuitProfiler:
                             json.dumps(temporal_json),
                             json.dumps(corr_json),
                             json.dumps(shape_devices_json),
+                            json.dumps(decomposed_json),
                         ),
                     )
                 conn.commit()

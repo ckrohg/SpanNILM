@@ -1,169 +1,886 @@
 # Known Device Signatures for NILM Classification
 # Each device has characteristic power levels, duty cycles, and state patterns.
 # These are starting templates - the system learns and refines from actual data.
+#
+# Fields:
+#   category: Grouping for display
+#   power_range: [min_w, max_w]
+#   duration_range: [min_s, max_s] — typical single run
+#   duty_cycle_pattern: cycling | sustained | intermittent | brief | multi_phase | variable
+#   startup_surge: whether device has inrush current spike
+#   surge_multiplier: ratio of surge to steady-state (1.0 = no surge)
+#   steady_state_variance: 0-1, how much power fluctuates during operation
+#   typical_locations: where this device is commonly found
+#   typical_hours: [start_hour, end_hour] in 24h format
+#   seasonal: year_round | winter | summer
+#   cycling_on_s: typical ON duration per cycle (null if not cycling)
+#   cycling_off_s: typical OFF duration per cycle (null if not cycling)
+#   power_stability: 1.0 = perfectly flat, 0.5 = very variable
 
 devices:
-  # --- HVAC ---
+
+  # ============================================================
+  # HVAC
+  # ============================================================
+
   hvac_compressor:
     category: "HVAC"
-    power_range_w: [1500, 5000]
-    typical_duration_range_s: [300, 7200]
-    duty_cycle_pattern: "cycling"  # On/off with regular intervals
-    signature:
-      startup_surge: true
-      surge_multiplier: 2.5  # Inrush current on startup
-      steady_state_variance: 0.05
+    power_range: [1500, 5000]
+    duration_range: [300, 7200]
+    duty_cycle_pattern: "cycling"
+    startup_surge: true
+    surge_multiplier: 2.5
+    steady_state_variance: 0.05
+    typical_locations: ["outdoor", "basement"]
+    typical_hours: [0, 24]
+    seasonal: "summer"
+    cycling_on_s: 600
+    cycling_off_s: 600
+    power_stability: 0.95
     notes: "AC compressor - high power, cycling pattern, inrush current"
 
   hvac_fan:
     category: "HVAC"
-    power_range_w: [100, 500]
-    typical_duration_range_s: [300, 14400]
+    power_range: [100, 500]
+    duration_range: [300, 14400]
     duty_cycle_pattern: "sustained"
-    signature:
-      startup_surge: false
-      steady_state_variance: 0.03
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.03
+    typical_locations: ["basement", "utility"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.97
 
   heat_pump:
     category: "HVAC"
-    power_range_w: [1000, 4000]
-    typical_duration_range_s: [600, 14400]
+    power_range: [1000, 4000]
+    duration_range: [600, 14400]
     duty_cycle_pattern: "variable"
-    signature:
-      startup_surge: true
-      surge_multiplier: 2.0
-      steady_state_variance: 0.15
+    startup_surge: true
+    surge_multiplier: 2.0
+    steady_state_variance: 0.15
+    typical_locations: ["outdoor", "basement"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.80
     notes: "Variable speed - power level changes with demand"
 
-  # --- Kitchen ---
+  ceiling_fan:
+    category: "HVAC"
+    power_range: [15, 75]
+    duration_range: [1800, 43200]
+    duty_cycle_pattern: "sustained"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.02
+    typical_locations: ["any"]
+    typical_hours: [8, 23]
+    seasonal: "summer"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.98
+
+  portable_heater:
+    category: "HVAC"
+    power_range: [750, 1500]
+    duration_range: [300, 14400]
+    duty_cycle_pattern: "cycling"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.02
+    typical_locations: ["any"]
+    typical_hours: [6, 23]
+    seasonal: "winter"
+    cycling_on_s: 300
+    cycling_off_s: 300
+    power_stability: 0.98
+    notes: "Thermostat-controlled cycling of heating element"
+
+  window_ac:
+    category: "HVAC"
+    power_range: [500, 1500]
+    duration_range: [300, 14400]
+    duty_cycle_pattern: "cycling"
+    startup_surge: true
+    surge_multiplier: 2.5
+    steady_state_variance: 0.05
+    typical_locations: ["bedroom", "living_room"]
+    typical_hours: [0, 24]
+    seasonal: "summer"
+    cycling_on_s: 600
+    cycling_off_s: 600
+    power_stability: 0.95
+
+  attic_fan:
+    category: "HVAC"
+    power_range: [200, 500]
+    duration_range: [1800, 28800]
+    duty_cycle_pattern: "cycling"
+    startup_surge: true
+    surge_multiplier: 1.5
+    steady_state_variance: 0.05
+    typical_locations: ["attic"]
+    typical_hours: [10, 22]
+    seasonal: "summer"
+    cycling_on_s: 1200
+    cycling_off_s: 600
+    power_stability: 0.93
+
+  bathroom_exhaust:
+    category: "HVAC"
+    power_range: [20, 80]
+    duration_range: [300, 1800]
+    duty_cycle_pattern: "sustained"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.03
+    typical_locations: ["bathroom"]
+    typical_hours: [6, 23]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.97
+
+  humidifier:
+    category: "HVAC"
+    power_range: [30, 100]
+    duration_range: [3600, 43200]
+    duty_cycle_pattern: "sustained"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.05
+    typical_locations: ["bedroom", "living_room"]
+    typical_hours: [0, 24]
+    seasonal: "winter"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.95
+
+  air_purifier:
+    category: "HVAC"
+    power_range: [10, 60]
+    duration_range: [3600, 86400]
+    duty_cycle_pattern: "sustained"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.03
+    typical_locations: ["bedroom", "living_room"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.97
+
+  # ============================================================
+  # Kitchen
+  # ============================================================
+
   refrigerator:
     category: "Kitchen"
-    power_range_w: [80, 250]
-    typical_duration_range_s: [300, 1800]
+    power_range: [80, 250]
+    duration_range: [300, 1800]
     duty_cycle_pattern: "cycling"
-    signature:
-      startup_surge: true
-      surge_multiplier: 3.0
-      steady_state_variance: 0.05
-      cycle_period_range_s: [1200, 5400]
+    startup_surge: true
+    surge_multiplier: 3.0
+    steady_state_variance: 0.05
+    typical_locations: ["kitchen"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: 900
+    cycling_off_s: 2700
+    power_stability: 0.95
     notes: "Very regular cycling pattern, compressor on/off"
 
   microwave:
     category: "Kitchen"
-    power_range_w: [800, 1500]
-    typical_duration_range_s: [15, 600]
-    duty_cycle_pattern: "sustained"
-    signature:
-      startup_surge: false
-      steady_state_variance: 0.02
+    power_range: [800, 1500]
+    duration_range: [15, 600]
+    duty_cycle_pattern: "brief"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.02
+    typical_locations: ["kitchen"]
+    typical_hours: [7, 22]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.98
     notes: "Short duration, very stable power draw"
 
   oven_element:
     category: "Kitchen"
-    power_range_w: [2000, 5000]
-    typical_duration_range_s: [300, 7200]
+    power_range: [2000, 5000]
+    duration_range: [300, 7200]
     duty_cycle_pattern: "cycling"
-    signature:
-      startup_surge: false
-      steady_state_variance: 0.02
-      cycle_period_range_s: [120, 600]
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.02
+    typical_locations: ["kitchen"]
+    typical_hours: [10, 21]
+    seasonal: "year_round"
+    cycling_on_s: 180
+    cycling_off_s: 120
+    power_stability: 0.98
     notes: "Thermostat-controlled cycling of heating element"
 
   dishwasher:
     category: "Kitchen"
-    power_range_w: [200, 2000]
-    typical_duration_range_s: [1800, 7200]
+    power_range: [200, 2000]
+    duration_range: [1800, 7200]
     duty_cycle_pattern: "multi_phase"
-    signature:
-      startup_surge: false
-      steady_state_variance: 0.3
-      phases: ["wash_motor", "heat", "rinse", "dry"]
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.30
+    typical_locations: ["kitchen"]
+    typical_hours: [18, 23]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.50
     notes: "Multi-phase FSM: motor + heater cycling through program"
 
-  # --- Laundry ---
+  coffee_maker:
+    category: "Kitchen"
+    power_range: [800, 1200]
+    duration_range: [300, 900]
+    duty_cycle_pattern: "brief"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.05
+    typical_locations: ["kitchen"]
+    typical_hours: [5, 9]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.95
+    notes: "Heating element, typically runs in morning hours"
+
+  toaster:
+    category: "Kitchen"
+    power_range: [800, 1500]
+    duration_range: [60, 300]
+    duty_cycle_pattern: "brief"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.02
+    typical_locations: ["kitchen"]
+    typical_hours: [6, 10]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.98
+    notes: "Very short, stable resistive load"
+
+  instant_pot:
+    category: "Kitchen"
+    power_range: [700, 1200]
+    duration_range: [600, 7200]
+    duty_cycle_pattern: "multi_phase"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.15
+    typical_locations: ["kitchen"]
+    typical_hours: [10, 21]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.70
+    notes: "Heats to pressure then drops to sustain mode"
+
+  stand_mixer:
+    category: "Kitchen"
+    power_range: [200, 500]
+    duration_range: [60, 600]
+    duty_cycle_pattern: "intermittent"
+    startup_surge: true
+    surge_multiplier: 1.5
+    steady_state_variance: 0.15
+    typical_locations: ["kitchen"]
+    typical_hours: [8, 21]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.80
+    notes: "Motor load varies with mixing resistance"
+
+  # ============================================================
+  # Laundry
+  # ============================================================
+
   washer:
     category: "Laundry"
-    power_range_w: [200, 500]
-    typical_duration_range_s: [1800, 5400]
+    power_range: [200, 500]
+    duration_range: [1800, 5400]
     duty_cycle_pattern: "multi_phase"
-    signature:
-      startup_surge: true
-      surge_multiplier: 2.0
-      steady_state_variance: 0.25
-      phases: ["fill", "wash", "drain", "spin"]
+    startup_surge: true
+    surge_multiplier: 2.0
+    steady_state_variance: 0.25
+    typical_locations: ["laundry", "basement"]
+    typical_hours: [7, 22]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.60
 
   dryer_electric:
     category: "Laundry"
-    power_range_w: [2000, 5500]
-    typical_duration_range_s: [1800, 5400]
+    power_range: [2000, 5500]
+    duration_range: [1800, 5400]
     duty_cycle_pattern: "cycling"
-    signature:
-      startup_surge: false
-      steady_state_variance: 0.1
-      cycle_period_range_s: [60, 300]
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.10
+    typical_locations: ["laundry", "basement"]
+    typical_hours: [7, 22]
+    seasonal: "year_round"
+    cycling_on_s: 120
+    cycling_off_s: 60
+    power_stability: 0.85
     notes: "Heating element cycles, motor is constant"
 
-  # --- Water ---
+  iron:
+    category: "Laundry"
+    power_range: [1000, 1500]
+    duration_range: [300, 3600]
+    duty_cycle_pattern: "cycling"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.05
+    typical_locations: ["laundry", "bedroom"]
+    typical_hours: [7, 22]
+    seasonal: "year_round"
+    cycling_on_s: 60
+    cycling_off_s: 60
+    power_stability: 0.95
+    notes: "Thermostat-controlled cycling of heating element"
+
+  # ============================================================
+  # Water
+  # ============================================================
+
   water_heater:
     category: "Water"
-    power_range_w: [3000, 5500]
-    typical_duration_range_s: [600, 3600]
+    power_range: [3000, 5500]
+    duration_range: [600, 3600]
     duty_cycle_pattern: "sustained"
-    signature:
-      startup_surge: false
-      steady_state_variance: 0.02
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.02
+    typical_locations: ["basement", "utility"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.98
     notes: "Very stable high power draw, pure resistive load"
 
   well_pump:
     category: "Water"
-    power_range_w: [500, 2000]
-    typical_duration_range_s: [30, 600]
+    power_range: [500, 2000]
+    duration_range: [30, 600]
     duty_cycle_pattern: "sustained"
-    signature:
-      startup_surge: true
-      surge_multiplier: 3.0
-      steady_state_variance: 0.05
+    startup_surge: true
+    surge_multiplier: 3.0
+    steady_state_variance: 0.05
+    typical_locations: ["basement", "outdoor"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.95
 
-  # --- EV / Garage ---
+  hot_tub:
+    category: "Water"
+    power_range: [1500, 6000]
+    duration_range: [1800, 14400]
+    duty_cycle_pattern: "cycling"
+    startup_surge: true
+    surge_multiplier: 2.0
+    steady_state_variance: 0.05
+    typical_locations: ["outdoor", "basement"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: 1200
+    cycling_off_s: 2400
+    power_stability: 0.93
+    notes: "Heater + pump combo, cycling to maintain temperature"
+
+  # ============================================================
+  # EV / Garage
+  # ============================================================
+
   ev_charger_l2:
     category: "EV"
-    power_range_w: [3000, 11500]
-    typical_duration_range_s: [3600, 43200]
+    power_range: [3000, 11500]
+    duration_range: [3600, 43200]
     duty_cycle_pattern: "sustained"
-    signature:
-      startup_surge: false
-      steady_state_variance: 0.02
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.02
+    typical_locations: ["garage"]
+    typical_hours: [20, 8]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.98
     notes: "Very long duration, very stable power (EVSE controlled)"
 
   garage_door:
     category: "Garage"
-    power_range_w: [300, 600]
-    typical_duration_range_s: [10, 30]
-    duty_cycle_pattern: "sustained"
-    signature:
-      startup_surge: true
-      surge_multiplier: 2.0
-      steady_state_variance: 0.1
+    power_range: [300, 600]
+    duration_range: [10, 30]
+    duty_cycle_pattern: "brief"
+    startup_surge: true
+    surge_multiplier: 2.0
+    steady_state_variance: 0.10
+    typical_locations: ["garage"]
+    typical_hours: [6, 22]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.85
     notes: "Very short, distinctive pattern"
 
-  # --- Lighting / Other ---
+  garage_fridge:
+    category: "Garage"
+    power_range: [80, 200]
+    duration_range: [300, 1800]
+    duty_cycle_pattern: "cycling"
+    startup_surge: true
+    surge_multiplier: 3.0
+    steady_state_variance: 0.05
+    typical_locations: ["garage"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: 900
+    cycling_off_s: 2700
+    power_stability: 0.95
+    notes: "Same as kitchen fridge but in garage; works harder in summer heat"
+
+  # ============================================================
+  # Pool / Outdoor
+  # ============================================================
+
   pool_pump:
     category: "Pool"
-    power_range_w: [500, 2500]
-    typical_duration_range_s: [3600, 28800]
+    power_range: [500, 2500]
+    duration_range: [3600, 28800]
     duty_cycle_pattern: "sustained"
-    signature:
-      startup_surge: true
-      surge_multiplier: 2.5
-      steady_state_variance: 0.03
+    startup_surge: true
+    surge_multiplier: 2.5
+    steady_state_variance: 0.03
+    typical_locations: ["outdoor"]
+    typical_hours: [8, 18]
+    seasonal: "summer"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.97
     notes: "Long runs on a daily schedule"
+
+  # ============================================================
+  # Basement
+  # ============================================================
+
+  dehumidifier:
+    category: "Basement"
+    power_range: [200, 700]
+    duration_range: [1200, 14400]
+    duty_cycle_pattern: "cycling"
+    startup_surge: true
+    surge_multiplier: 2.0
+    steady_state_variance: 0.05
+    typical_locations: ["basement", "crawlspace"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: 1200
+    cycling_off_s: 2400
+    power_stability: 0.93
+    notes: "Compressor cycling to maintain humidity setpoint"
+
+  chest_freezer:
+    category: "Basement"
+    power_range: [80, 200]
+    duration_range: [300, 1800]
+    duty_cycle_pattern: "cycling"
+    startup_surge: true
+    surge_multiplier: 3.0
+    steady_state_variance: 0.05
+    typical_locations: ["basement", "garage"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: 900
+    cycling_off_s: 2700
+    power_stability: 0.95
+    notes: "Very regular compressor cycling, similar to fridge"
+
+  sump_pump:
+    category: "Basement"
+    power_range: [400, 1200]
+    duration_range: [60, 600]
+    duty_cycle_pattern: "intermittent"
+    startup_surge: true
+    surge_multiplier: 3.0
+    steady_state_variance: 0.05
+    typical_locations: ["basement"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.93
+    notes: "Brief runs, weather/rain driven, irregular timing"
+
+  server_rack:
+    category: "Basement"
+    power_range: [100, 400]
+    duration_range: [86400, 86400]
+    duty_cycle_pattern: "sustained"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.08
+    typical_locations: ["basement", "office"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.90
+    notes: "24/7 sustained load, slight variation with compute load"
+
+  network_equipment:
+    category: "Basement"
+    power_range: [20, 80]
+    duration_range: [86400, 86400]
+    duty_cycle_pattern: "sustained"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.03
+    typical_locations: ["basement", "office", "closet"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.97
+    notes: "Router, switch, modem - very stable 24/7"
+
+  wine_cooler:
+    category: "Basement"
+    power_range: [50, 150]
+    duration_range: [300, 1800]
+    duty_cycle_pattern: "cycling"
+    startup_surge: true
+    surge_multiplier: 2.0
+    steady_state_variance: 0.05
+    typical_locations: ["basement", "kitchen"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: 600
+    cycling_off_s: 1800
+    power_stability: 0.95
+    notes: "Small compressor, similar to mini-fridge"
+
+  # ============================================================
+  # Barn / Farm
+  # ============================================================
+
+  stock_tank_heater:
+    category: "Barn"
+    power_range: [1000, 1500]
+    duration_range: [600, 14400]
+    duty_cycle_pattern: "cycling"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.02
+    typical_locations: ["barn"]
+    typical_hours: [0, 24]
+    seasonal: "winter"
+    cycling_on_s: 900
+    cycling_off_s: 900
+    power_stability: 0.98
+    notes: "Resistive heater to keep livestock water from freezing"
+
+  barn_heater:
+    category: "Barn"
+    power_range: [1000, 2000]
+    duration_range: [600, 28800]
+    duty_cycle_pattern: "cycling"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.03
+    typical_locations: ["barn"]
+    typical_hours: [0, 24]
+    seasonal: "winter"
+    cycling_on_s: 600
+    cycling_off_s: 600
+    power_stability: 0.97
+    notes: "Thermostat-controlled barn space heater"
+
+  livestock_water_pump:
+    category: "Barn"
+    power_range: [200, 500]
+    duration_range: [60, 600]
+    duty_cycle_pattern: "intermittent"
+    startup_surge: true
+    surge_multiplier: 2.5
+    steady_state_variance: 0.05
+    typical_locations: ["barn"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.93
+    notes: "Brief pump runs for livestock watering"
+
+  barn_lighting:
+    category: "Barn"
+    power_range: [100, 500]
+    duration_range: [1800, 43200]
+    duty_cycle_pattern: "sustained"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.02
+    typical_locations: ["barn"]
+    typical_hours: [5, 21]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.98
+    notes: "Barn overhead lights, often on timer"
+
+  workshop_tools:
+    category: "Barn"
+    power_range: [500, 2000]
+    duration_range: [10, 600]
+    duty_cycle_pattern: "intermittent"
+    startup_surge: true
+    surge_multiplier: 2.5
+    steady_state_variance: 0.20
+    typical_locations: ["garage", "barn", "workshop"]
+    typical_hours: [8, 20]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.65
+    notes: "Power tools - highly variable duration and power"
+
+  # ============================================================
+  # Entertainment / Electronics
+  # ============================================================
+
+  desktop_computer:
+    category: "Electronics"
+    power_range: [100, 400]
+    duration_range: [1800, 43200]
+    duty_cycle_pattern: "sustained"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.10
+    typical_locations: ["office", "bedroom"]
+    typical_hours: [8, 23]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.85
+    notes: "Power varies with CPU/GPU load"
+
+  entertainment_center:
+    category: "Electronics"
+    power_range: [100, 300]
+    duration_range: [1800, 14400]
+    duty_cycle_pattern: "sustained"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.05
+    typical_locations: ["living_room", "family_room"]
+    typical_hours: [17, 23]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.93
+    notes: "TV + receiver + streaming box"
+
+  gaming_console:
+    category: "Electronics"
+    power_range: [50, 200]
+    duration_range: [1800, 14400]
+    duty_cycle_pattern: "sustained"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.08
+    typical_locations: ["living_room", "bedroom"]
+    typical_hours: [15, 24]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.88
+    notes: "Power varies with game vs idle"
+
+  home_theater:
+    category: "Electronics"
+    power_range: [200, 500]
+    duration_range: [3600, 14400]
+    duty_cycle_pattern: "sustained"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.05
+    typical_locations: ["living_room", "basement"]
+    typical_hours: [17, 24]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.93
+    notes: "Projector + receiver + subwoofer"
+
+  # ============================================================
+  # General Household
+  # ============================================================
 
   space_heater:
     category: "Heating"
-    power_range_w: [750, 1500]
-    typical_duration_range_s: [300, 14400]
+    power_range: [750, 1500]
+    duration_range: [300, 14400]
     duty_cycle_pattern: "cycling"
-    signature:
-      startup_surge: false
-      steady_state_variance: 0.02
-      cycle_period_range_s: [120, 600]
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.02
+    typical_locations: ["any"]
+    typical_hours: [6, 23]
+    seasonal: "winter"
+    cycling_on_s: 300
+    cycling_off_s: 300
+    power_stability: 0.98
+
+  vacuum:
+    category: "Household"
+    power_range: [500, 1500]
+    duration_range: [600, 1800]
+    duty_cycle_pattern: "intermittent"
+    startup_surge: true
+    surge_multiplier: 2.0
+    steady_state_variance: 0.15
+    typical_locations: ["any"]
+    typical_hours: [8, 20]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.75
+    notes: "Power varies as moved between surfaces"
+
+  hair_dryer:
+    category: "Household"
+    power_range: [1000, 1800]
+    duration_range: [300, 900]
+    duty_cycle_pattern: "brief"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.10
+    typical_locations: ["bathroom"]
+    typical_hours: [6, 9]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.85
+    notes: "Brief morning use, power varies with heat setting"
+
+  electric_blanket:
+    category: "Household"
+    power_range: [100, 200]
+    duration_range: [3600, 28800]
+    duty_cycle_pattern: "cycling"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.03
+    typical_locations: ["bedroom"]
+    typical_hours: [20, 8]
+    seasonal: "winter"
+    cycling_on_s: 300
+    cycling_off_s: 600
+    power_stability: 0.97
+    notes: "Thermostat cycling, nighttime winter use"
+
+  aquarium:
+    category: "Household"
+    power_range: [50, 300]
+    duration_range: [3600, 86400]
+    duty_cycle_pattern: "sustained"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.08
+    typical_locations: ["living_room"]
+    typical_hours: [0, 24]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.90
+    notes: "Filter pump + heater + lights; heater may cycle"
+
+  # ============================================================
+  # Additional Devices
+  # ============================================================
+
+  electric_stove_burner:
+    category: "Kitchen"
+    power_range: [1000, 2500]
+    duration_range: [120, 3600]
+    duty_cycle_pattern: "cycling"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.05
+    typical_locations: ["kitchen"]
+    typical_hours: [7, 21]
+    seasonal: "year_round"
+    cycling_on_s: 60
+    cycling_off_s: 30
+    power_stability: 0.95
+    notes: "Stovetop burner, thermostat cycling"
+
+  garbage_disposal:
+    category: "Kitchen"
+    power_range: [400, 750]
+    duration_range: [5, 60]
+    duty_cycle_pattern: "brief"
+    startup_surge: true
+    surge_multiplier: 2.5
+    steady_state_variance: 0.15
+    typical_locations: ["kitchen"]
+    typical_hours: [7, 22]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.80
+    notes: "Very brief motor runs"
+
+  electric_kettle:
+    category: "Kitchen"
+    power_range: [1000, 1500]
+    duration_range: [60, 300]
+    duty_cycle_pattern: "brief"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.02
+    typical_locations: ["kitchen"]
+    typical_hours: [6, 21]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.98
+    notes: "Resistive heating, auto-shutoff"
+
+  sewing_machine:
+    category: "Household"
+    power_range: [50, 150]
+    duration_range: [600, 7200]
+    duty_cycle_pattern: "intermittent"
+    startup_surge: false
+    surge_multiplier: 1.0
+    steady_state_variance: 0.20
+    typical_locations: ["office", "bedroom"]
+    typical_hours: [8, 22]
+    seasonal: "year_round"
+    cycling_on_s: null
+    cycling_off_s: null
+    power_stability: 0.70
+    notes: "Motor load varies with sewing speed"

@@ -77,11 +77,17 @@ span_nilm/
   collector/sources/
     tempiq_source.py          # TempIQ queries: get_aggregated_power(), get_readings(), etc.
   profiler/
-    circuit_profiler.py       # Orchestrator: histogram + temporal + shape + cross-circuit + user labels
-    shape_detector.py         # HDBSCAN on 76-dim features (shape + amplitude + temporal + transition + energy + time-of-use)
+    circuit_profiler.py       # Orchestrator: all detection stages
+    shape_detector.py         # HDBSCAN on 76-dim features + sub-panel pathway
     temporal_analyzer.py      # Session extraction, cycling, correlations
-  detection/                  # Legacy (Hart's algorithm) — not used in dashboard
-  models/                     # Legacy (DBSCAN + signature matching)
+    subpanel_decomposer.py    # Step-change decomposition for sub-panel circuits
+    llm_analyzer.py           # 3-mode Claude analysis (device/circuit/home)
+  models/
+    signature_matcher.py      # Multi-dimensional matching (50+ signatures, context-aware)
+    dedicated_learner.py      # Random Forest from dedicated circuit training data
+    signatures.py             # Legacy signature matching
+    classifier.py             # Legacy DBSCAN clustering
+  detection/                  # Legacy (Hart's algorithm)
 
 web/src/
   App.tsx                     # Main app: Dashboard / Circuits / Categories / Settings pages
@@ -114,21 +120,39 @@ web/src/
 - **`span_circuit_readings`** = SECONDARY. Raw readings, energy counter only updates in ~10 Wh jumps roughly once/hour. NOT useful for per-reading power. Only use for: `get_readings()` which derives power from energy deltas.
 - **Never use `instant_power_w`** — it's wrong (cumulative-derived values from SPAN API, not true instantaneous).
 
-### Detection Pipeline
+### Detection Pipeline (v2 — multi-stage)
 1. Fetch 90 days of 10-min aggregated data per circuit
-2. Extract ON sessions (power > 8W threshold)
-3. Normalize power curves to 32 points
-4. Extract 76-dim feature vector: shape(32) + amplitude(4) + temporal(3) + pattern(4) + transition(7) + energy(1) + time-of-use(25)
-5. HDBSCAN clustering (adaptive params by data volume)
-6. Characterize clusters: template curve, stats, phase count
-7. Context-aware naming from circuit name keywords
-8. Cross-circuit template matching (cosine > 0.9)
-9. Dedicated circuit templates as training anchors
-10. Claude Haiku AI naming with context (dedicated circuits listed, area-specific suggestions)
-11. User labels applied (confirm/reject/suppress persist across re-runs)
+2. **For sub-panels**: Step-change decomposition (`subpanel_decomposer.py`)
+   - Detect power step changes (delta > 30W) = individual device on/off events
+   - Pair ON/OFF events by magnitude matching (±25%, within 24h)
+   - Extract component runs = individual device contributions even when overlapping
+   - Detect baseload (10th percentile = always-on component)
+3. **For all circuits**: Shape-based session clustering (`shape_detector.py`)
+   - Extract ON sessions (power > 8W threshold), or use decomposed components for sub-panels
+   - Normalize power curves to 32 points
+   - Extract 76-dim feature vector: shape(32) + amplitude(4) + temporal(3) + pattern(4) + transition(7) + energy(1) + time-of-use(25)
+   - HDBSCAN clustering (adaptive params by data volume)
+   - Characterize clusters: template curve, stats, phase count
+4. **Multi-dimensional signature matching** (`signature_matcher.py`)
+   - 50+ device signatures with location context, seasonal patterns, cycling characteristics
+   - Scoring: power(30%) + duration(15%) + cycling(15%) + location(15%) + time-of-day(10%) + seasonal(10%) + stability(5%)
+5. **Supervised ML from dedicated circuits** (`dedicated_learner.py`)
+   - Random Forest trained on 10 known device types + "none of the above"
+   - Bayesian prior: penalizes finding duplicate device types already on dedicated circuits
+6. Cross-circuit template matching (cosine > 0.9)
+7. **LLM analysis** (`llm_analyzer.py`)
+   - Mode A: Claude adjudicates between ML/signature candidates per device (Haiku)
+   - Mode B: Claude analyzes full 24h sub-panel profiles to count devices (Sonnet)
+   - Mode C: Home-level reconciliation — catches duplicates and missing devices (Sonnet)
+8. Context-aware naming from circuit name keywords
+9. Claude Haiku AI naming with context (dedicated circuits listed, area-specific suggestions)
+10. User labels applied (confirm/reject/suppress persist across re-runs)
 
 ### AI Naming Prompt
-The Claude prompt includes: all dedicated circuits (to avoid suggesting them), area-specific device suggestions for sub-panels, power range guidelines. Key: tell Claude what's ALREADY identified so it suggests different things.
+The Claude prompt includes: all dedicated circuits (to avoid suggesting them), area-specific device suggestions for sub-panels, power range guidelines, top-3 candidates from signature matching and ML classifier. Key: tell Claude what's ALREADY identified so it suggests different things.
+
+### Signature Database
+`device_signatures.yaml` — 50+ device types with fields: power_range, duration_range, duty_cycle_pattern, typical_locations, typical_hours, seasonal, cycling_on_s, cycling_off_s, power_stability. Categories: HVAC, Kitchen, Laundry, Water, Basement, Barn, Electronics, General.
 
 ### Dashboard API
 `POST /api/dashboard?period=today` — accepts: today, yesterday, 7d, 30d, month, year, 365d. Returns: circuits with power/energy/devices, timeline, bill projection, trends, TOU schedule, always-on. All data from aggregated table.
@@ -146,6 +170,13 @@ Air-Water 1 (Heat Pump), Air-Water 2 (Heat Pump), Mini Split - Office/Living Roo
 
 ### Shared (7):
 2nd Floor Sub Panel, Hydronic Zone Pumps, Garage Door Opener, Basement Sub Panel, Barn Sub Panel, Lights/Outlets/Living Room, Hydronic Glycol Feeder
+
+## DB Tables (SpanNILM Supabase)
+- `circuits` — dedicated/shared config per circuit
+- `device_labels` — user/AI device names (equipment_id, cluster_id, name, source)
+- `circuit_profiles` — profiling results (states, shape_devices, temporal, correlations, decomposed_devices, llm_analysis, signature_matches)
+- `settings` — key-value settings (electricity_rate, tou_schedule, solar_*, timezone)
+- `model_artifacts` — serialized ML models (Random Forest, pretrained distributions)
 
 ## Deployment Notes
 - `git -c user.email=ckrohg@me.com commit` — must use this email
