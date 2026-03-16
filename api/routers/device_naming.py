@@ -412,3 +412,85 @@ def auto_name_all_devices():
 
     finally:
         conn.close()
+
+
+@router.post("/analyze/llm")
+def run_llm_analysis():
+    """Run Mode B + C LLM analysis on all circuits.
+
+    Mode B: Circuit story analysis on sub-panel circuits (Sonnet)
+    Mode C: Home reconciliation across all circuits (Sonnet)
+
+    Reads current profiles from DB, runs analysis, and stores results.
+    """
+    from api.deps import get_tempiq_source
+    from span_nilm.profiler.llm_analyzer import LLMAnalyzer
+
+    conn = _get_spannilm_db()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT * FROM circuit_profiles ORDER BY circuit_name")
+            profiles = [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+    if not profiles:
+        raise HTTPException(404, "No circuit profiles found. Run POST /api/profile first.")
+
+    # Parse JSONB fields
+    for p in profiles:
+        for field_name in ("shape_devices", "correlations", "signature_matches", "llm_analysis"):
+            val = p.get(field_name)
+            if isinstance(val, str):
+                p[field_name] = json.loads(val)
+            elif val is None:
+                p[field_name] = [] if field_name != "llm_analysis" else {}
+
+    source = get_tempiq_source()
+    analyzer = LLMAnalyzer()
+
+    # Build signature matches map from stored data
+    sig_matches_map: dict[str, list[dict]] = {}
+    for p in profiles:
+        eid = p["equipment_id"]
+        for sm_entry in (p.get("signature_matches") or []):
+            sig_matches_map.setdefault(eid, []).extend(
+                sm_entry.get("matches", [])
+            )
+
+    results = analyzer.run_all(
+        profiles=profiles,
+        source=source,
+        signature_matches_map=sig_matches_map,
+    )
+
+    # Store results back into circuit_profiles
+    conn = _get_spannilm_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "ALTER TABLE circuit_profiles ADD COLUMN IF NOT EXISTS llm_analysis JSONB DEFAULT '{}'"
+            )
+            conn.commit()
+
+            for p in profiles:
+                eid = p["equipment_id"]
+                llm_data = {
+                    "adjudications": results.get("adjudications", {}).get(eid, []),
+                    "circuit_story": results.get("circuit_stories", {}).get(eid, []),
+                    "reconciliation": results.get("reconciliation", {}),
+                }
+                cur.execute(
+                    "UPDATE circuit_profiles SET llm_analysis = %s::jsonb WHERE equipment_id = %s",
+                    (json.dumps(llm_data), eid),
+                )
+            conn.commit()
+    finally:
+        conn.close()
+
+    return {
+        "status": "ok",
+        "adjudications": len(results.get("adjudications", {})),
+        "circuit_stories": len(results.get("circuit_stories", {})),
+        "reconciliation": results.get("reconciliation", {}),
+    }

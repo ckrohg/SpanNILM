@@ -18,6 +18,7 @@ import psycopg2.extras
 
 from span_nilm.collector.sources.tempiq_source import TempIQSource
 from span_nilm.models.signatures import SignatureLibrary
+from span_nilm.models.signature_matcher import SignatureMatcher
 from span_nilm.profiler.shape_detector import ShapeDetector
 from span_nilm.profiler.temporal_analyzer import TemporalAnalyzer, TemporalProfile
 
@@ -54,6 +55,8 @@ class CircuitProfile:
     correlations: list[tuple[str, str, float]] = field(default_factory=list)  # (equip_id, name, score)
     shape_devices: list = field(default_factory=list)  # DeviceTemplate objects from shape detection
     decomposed_devices: list = field(default_factory=list)  # DecomposedDevice dicts from sub-panel decomposition
+    signature_matches: list = field(default_factory=list)  # SignatureMatch results per device
+    llm_analysis: dict = field(default_factory=dict)  # LLM analysis results (modes A/B/C)
 
 
 class CircuitProfiler:
@@ -165,9 +168,11 @@ class CircuitProfiler:
                     for cid, score in corr_map[p.equipment_id][:5]
                 ]
 
-        # Learn from dedicated circuits: extract reference templates and
-        # compare against shared circuit devices for type suggestions
-        self._learn_from_dedicated(profiles, agg_df)
+        # Learn from dedicated circuits via Random Forest ML classifier
+        self._learn_from_dedicated_ml(profiles, agg_df)
+
+        # Run multi-dimensional signature matching on shared circuit devices
+        self._run_signature_matching(profiles)
 
         # Apply user labels: override AI names with confirmed labels,
         # adjust confidence, handle suppressed devices across circuits
@@ -175,6 +180,9 @@ class CircuitProfiler:
 
         # Cross-circuit device template matching
         self._apply_cross_circuit_matches(profiles)
+
+        # Run LLM-powered analysis (Modes A/B/C)
+        self._run_llm_analysis(profiles)
 
         logger.info("Profiled %d circuits, found %d total power states",
                      len(profiles), sum(len(p.states) for p in profiles))
@@ -605,128 +613,242 @@ class CircuitProfiler:
             state.device_name = f"{loc_prefix}sub-panel load ({self._format_power_label(state.center_w)})"
             state.confidence = 0.3
 
-    def _learn_from_dedicated(
+    def _learn_from_dedicated_ml(
         self, profiles: list[CircuitProfile], agg_df: pd.DataFrame
     ):
-        """Use dedicated circuit patterns as training data for shared circuit detection.
+        """Train a Random Forest from dedicated circuits and predict on shared circuit devices.
 
-        For each dedicated circuit with a known device type:
-        1. Extract sessions from the aggregated power data
-        2. Normalize each session's power curve to a 32-point template
-        3. Compute the median template as the reference for that device type
-
-        Then compare every shared circuit's detected device templates against
-        these references using cosine similarity. If similarity > 0.85,
-        suggest the dedicated circuit's device type as the name and boost
-        confidence.
+        Replaces the old cosine-similarity approach with a proper ML classifier
+        that uses 9-dimensional feature vectors and Bayesian priors.
         """
-        from numpy.linalg import norm
+        from span_nilm.models.dedicated_learner import DedicatedLearner
 
-        shape_det = ShapeDetector()
-
-        # Step 1: Build reference templates from dedicated circuits
-        reference_templates: list[dict] = []
-        # dict keys: device_type, template (np.ndarray), avg_power_w
-
-        for profile in profiles:
-            if not profile.is_dedicated or not profile.dedicated_device_type:
-                continue
-
-            # Get aggregated data for this dedicated circuit
-            circuit_data = agg_df[agg_df["circuit_id"] == profile.equipment_id]
-            if circuit_data.empty:
-                continue
-
-            circuit_data = circuit_data.sort_values("timestamp").reset_index(drop=True)
-
-            # Extract sessions
-            sessions = shape_det._extract_sessions(circuit_data)
-            if len(sessions) < 3:
-                logger.debug(
-                    "Too few sessions (%d) on dedicated circuit %s for reference template",
-                    len(sessions), profile.circuit_name,
-                )
-                continue
-
-            # Normalize each session's power curve
-            curves = []
-            powers = []
-            for s in sessions:
-                c = shape_det._normalize_curve(s.power_curve)
-                if c is not None:
-                    curves.append(c)
-                    powers.append(float(np.mean(s.power_curve)))
-
-            if len(curves) < 3:
-                continue
-
-            # Median template = robust reference shape
-            template = np.median(np.array(curves), axis=0)
-            avg_power = float(np.median(powers))
-
-            reference_templates.append({
-                "device_type": profile.dedicated_device_type,
-                "circuit_name": profile.circuit_name,
-                "template": template,
-                "avg_power_w": avg_power,
-                "session_count": len(curves),
-            })
-            logger.info(
-                "Reference template for '%s' from %s: %d sessions, %.0fW avg",
-                profile.dedicated_device_type, profile.circuit_name,
-                len(curves), avg_power,
+        try:
+            learner = DedicatedLearner(
+                source=self.source,
+                spannilm_db_url=self.db_url,
+                data_days=self.data_days,
             )
 
-        if not reference_templates:
-            logger.info("No reference templates extracted from dedicated circuits")
+            # Train from dedicated circuits
+            train_result = learner.train()
+            if "error" in train_result:
+                logger.warning("DedicatedLearner training failed: %s", train_result)
+                return
+
+            # Save model for later use
+            learner.save_model()
+
+            # Predict on shared circuit devices
+            matches_found = 0
+            for profile in profiles:
+                if profile.is_dedicated or not profile.shape_devices:
+                    continue
+
+                for device in profile.shape_devices:
+                    features = DedicatedLearner.features_from_template({
+                        "avg_power_w": device.avg_power_w,
+                        "peak_power_w": device.peak_power_w,
+                        "avg_duration_min": device.avg_duration_min,
+                        "num_phases": device.num_phases,
+                        "has_startup_surge": device.has_startup_surge,
+                        "peak_hours": device.peak_hours,
+                    })
+
+                    predictions = learner.predict(features)
+                    if not predictions:
+                        continue
+
+                    top_type, top_prob = predictions[0]
+
+                    if top_type == "unknown" and top_prob > 0.6:
+                        # High "unknown" probability — leave for signature matcher
+                        logger.debug(
+                            "ML says 'unknown' (%.0f%%) for %s on %s",
+                            top_prob * 100, device.name, profile.circuit_name,
+                        )
+                        continue
+
+                    if top_type != "unknown" and top_prob > 0.7:
+                        old_name = device.name
+                        device.name = f"{top_type} (ML matched)"
+                        device.confidence = min(1.0, device.confidence + 0.15)
+                        matches_found += 1
+                        logger.info(
+                            "ML match on %s: '%s' -> '%s' (prob=%.0f%%)",
+                            profile.circuit_name, old_name, device.name,
+                            top_prob * 100,
+                        )
+
+            logger.info(
+                "Dedicated ML learning: %d device matches found", matches_found
+            )
+
+        except Exception as e:
+            logger.warning("DedicatedLearner failed (non-fatal): %s", e)
+
+    def _run_signature_matching(self, profiles: list[CircuitProfile]):
+        """Run multi-dimensional signature matching on shared circuit devices.
+
+        Stores top-5 matches per device in profile.signature_matches for
+        later use by LLM adjudication.
+        """
+        try:
+            matcher = SignatureMatcher()
+        except Exception as e:
+            logger.warning("SignatureMatcher init failed: %s", e)
             return
 
-        logger.info(
-            "Extracted %d reference templates from dedicated circuits",
-            len(reference_templates),
-        )
-
-        # Step 2: Compare shared circuit devices against references
-        matches_found = 0
         for profile in profiles:
             if profile.is_dedicated or not profile.shape_devices:
                 continue
 
+            profile_sig_matches = []
             for device in profile.shape_devices:
-                dev_curve = np.array(device.template_curve)
-                dev_norm = norm(dev_curve)
-                if dev_norm < 1e-9:
-                    continue
+                matches = matcher.match(
+                    power_w=device.avg_power_w,
+                    duration_s=device.avg_duration_min * 60 if device.avg_duration_min > 0 else None,
+                    is_cycling=device.is_cycling,
+                    peak_hours=device.peak_hours,
+                    circuit_name=profile.circuit_name,
+                )
+                match_dicts = [
+                    {
+                        "device_name": m.device_name,
+                        "category": m.category,
+                        "confidence": round(m.confidence, 3),
+                        "reasoning": m.reasoning[:3] if m.reasoning else [],
+                    }
+                    for m in matches[:5]
+                ]
+                profile_sig_matches.append({
+                    "cluster_id": device.cluster_id,
+                    "matches": match_dicts,
+                })
 
-                best_sim = 0.0
-                best_ref = None
+            profile.signature_matches = profile_sig_matches
 
-                for ref in reference_templates:
-                    ref_curve = ref["template"]
-                    ref_norm = norm(ref_curve)
-                    if ref_norm < 1e-9:
-                        continue
+    def _run_llm_analysis(self, profiles: list[CircuitProfile]):
+        """Run LLM-powered analysis (Modes A/B/C) on all profiles.
 
-                    cosine = float(np.dot(dev_curve, ref_curve) / (dev_norm * ref_norm))
-                    if cosine > best_sim:
-                        best_sim = cosine
-                        best_ref = ref
+        Stores results in each profile's llm_analysis field.
+        """
+        try:
+            from span_nilm.profiler.llm_analyzer import LLMAnalyzer
+            from span_nilm.models.dedicated_learner import DedicatedLearner
+        except ImportError as e:
+            logger.warning("LLM analysis imports failed: %s", e)
+            return
 
-                if best_ref is not None and best_sim > 0.85:
-                    old_name = device.name
-                    device.name = f"{best_ref['device_type']} (matched)"
-                    device.confidence = min(1.0, device.confidence + 0.15)
-                    matches_found += 1
-                    logger.info(
-                        "Dedicated match on %s: '%s' -> '%s' "
-                        "(cosine=%.3f vs %s)",
-                        profile.circuit_name, old_name, device.name,
-                        best_sim, best_ref["circuit_name"],
-                    )
+        # Build profile dicts for the analyzer
+        profile_dicts = []
+        sig_matches_map: dict[str, list[dict]] = {}
+        ml_predictions_map: dict[str, dict[int, list]] = {}
 
-        logger.info(
-            "Dedicated circuit learning: %d device matches found", matches_found
-        )
+        # Try to load the ML model for predictions
+        learner = None
+        try:
+            learner = DedicatedLearner(
+                source=self.source,
+                spannilm_db_url=self.db_url,
+            )
+            # Will auto-load saved model on first predict call
+        except Exception:
+            pass
+
+        for profile in profiles:
+            pd_dict = {
+                "equipment_id": profile.equipment_id,
+                "circuit_name": profile.circuit_name,
+                "is_dedicated": profile.is_dedicated,
+                "dedicated_device_type": profile.dedicated_device_type,
+                "baseload_w": profile.baseload_w,
+                "shape_devices": [],
+            }
+
+            if profile.shape_devices:
+                for sd in profile.shape_devices:
+                    sd_dict = {
+                        "cluster_id": int(sd.cluster_id),
+                        "name": sd.name,
+                        "template_curve": [float(v) for v in sd.template_curve],
+                        "avg_power_w": float(sd.avg_power_w),
+                        "peak_power_w": float(sd.peak_power_w),
+                        "avg_duration_min": float(sd.avg_duration_min),
+                        "sessions_per_day": float(sd.sessions_per_day),
+                        "peak_hours": [int(h) for h in sd.peak_hours],
+                        "confidence": float(sd.confidence),
+                        "num_phases": int(sd.num_phases),
+                        "has_startup_surge": bool(sd.has_startup_surge),
+                        "is_cycling": bool(sd.is_cycling),
+                    }
+                    pd_dict["shape_devices"].append(sd_dict)
+
+                    # Get ML predictions for this device
+                    if learner and not profile.is_dedicated:
+                        try:
+                            features = DedicatedLearner.features_from_template(sd_dict)
+                            preds = learner.predict(features)
+                            ml_predictions_map.setdefault(profile.equipment_id, {})[
+                                int(sd.cluster_id)
+                            ] = preds[:3]
+                        except Exception:
+                            pass
+
+            # Build signature matches map from stored data
+            for sm_entry in (profile.signature_matches or []):
+                sig_matches_map.setdefault(profile.equipment_id, []).extend(
+                    sm_entry.get("matches", [])
+                )
+
+            profile_dicts.append(pd_dict)
+
+        try:
+            analyzer = LLMAnalyzer()
+            results = analyzer.run_all(
+                profiles=profile_dicts,
+                source=self.source,
+                signature_matches_map=sig_matches_map,
+                ml_predictions_map=ml_predictions_map,
+            )
+
+            # Store results back into profiles
+            for profile in profiles:
+                eid = profile.equipment_id
+                profile.llm_analysis = {
+                    "adjudications": results.get("adjudications", {}).get(eid, []),
+                    "circuit_story": results.get("circuit_stories", {}).get(eid, []),
+                }
+
+                # Apply adjudication names if confidence is high
+                for adj in profile.llm_analysis.get("adjudications", []):
+                    if adj.get("confidence", 0) >= 0.7:
+                        cluster_id = adj.get("cluster_id")
+                        for sd in profile.shape_devices:
+                            if sd.cluster_id == cluster_id:
+                                old_name = sd.name
+                                sd.name = adj["name"]
+                                sd.confidence = max(sd.confidence, adj["confidence"])
+                                logger.info(
+                                    "LLM adjudication on %s: '%s' -> '%s'",
+                                    profile.circuit_name, old_name, sd.name,
+                                )
+                                break
+
+            # Store reconciliation in all profiles (it's home-level)
+            reconciliation = results.get("reconciliation", {})
+            for profile in profiles:
+                if not profile.is_dedicated:
+                    profile.llm_analysis["reconciliation"] = reconciliation
+
+            logger.info(
+                "LLM analysis complete: %d adjudications, %d circuit stories",
+                sum(len(v) for v in results.get("adjudications", {}).values()),
+                len(results.get("circuit_stories", {})),
+            )
+
+        except Exception as e:
+            logger.warning("LLM analysis failed (non-fatal): %s", e)
 
     def _apply_user_labels(self, profiles: list[CircuitProfile]):
         """Apply user-confirmed labels to shape_devices, adjusting names and confidence.
@@ -881,12 +1003,18 @@ class CircuitProfiler:
         conn = psycopg2.connect(self.db_url)
         try:
             with conn.cursor() as cur:
-                # Ensure shape_devices and decomposed_devices columns exist
+                # Ensure all JSONB columns exist
                 cur.execute(
                     "ALTER TABLE circuit_profiles ADD COLUMN IF NOT EXISTS shape_devices JSONB DEFAULT '[]'"
                 )
                 cur.execute(
                     "ALTER TABLE circuit_profiles ADD COLUMN IF NOT EXISTS decomposed_devices JSONB DEFAULT '[]'"
+                )
+                cur.execute(
+                    "ALTER TABLE circuit_profiles ADD COLUMN IF NOT EXISTS llm_analysis JSONB DEFAULT '{}'"
+                )
+                cur.execute(
+                    "ALTER TABLE circuit_profiles ADD COLUMN IF NOT EXISTS signature_matches JSONB DEFAULT '[]'"
                 )
                 conn.commit()
 
@@ -978,13 +1106,18 @@ class CircuitProfiler:
                             "max_duration_min": float(dd["max_duration_min"]),
                         })
 
+                    # Serialize LLM analysis and signature matches
+                    llm_analysis_json = p.llm_analysis if isinstance(p.llm_analysis, dict) else {}
+                    sig_matches_json = p.signature_matches if isinstance(p.signature_matches, list) else []
+
                     cur.execute(
                         """
                         INSERT INTO circuit_profiles
                             (equipment_id, circuit_name, is_dedicated, dedicated_device_type,
                              states, total_readings, active_pct, baseload_w, data_days,
-                             temporal, correlations, shape_devices, decomposed_devices)
-                        VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb)
+                             temporal, correlations, shape_devices, decomposed_devices,
+                             llm_analysis, signature_matches)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb)
                         ON CONFLICT (equipment_id)
                         DO UPDATE SET
                             circuit_name = EXCLUDED.circuit_name,
@@ -999,7 +1132,9 @@ class CircuitProfiler:
                             temporal = EXCLUDED.temporal,
                             correlations = EXCLUDED.correlations,
                             shape_devices = EXCLUDED.shape_devices,
-                            decomposed_devices = EXCLUDED.decomposed_devices
+                            decomposed_devices = EXCLUDED.decomposed_devices,
+                            llm_analysis = EXCLUDED.llm_analysis,
+                            signature_matches = EXCLUDED.signature_matches
                         """,
                         (
                             p.equipment_id,
@@ -1015,6 +1150,8 @@ class CircuitProfiler:
                             json.dumps(corr_json),
                             json.dumps(shape_devices_json),
                             json.dumps(decomposed_json),
+                            json.dumps(llm_analysis_json),
+                            json.dumps(sig_matches_json),
                         ),
                     )
                 conn.commit()

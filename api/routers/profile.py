@@ -93,6 +93,8 @@ def get_profiles():
                 "states": r["states"] or [],
                 "temporal": r.get("temporal") or {},
                 "correlations": r.get("correlations") or [],
+                "llm_analysis": r.get("llm_analysis") or {},
+                "signature_matches": r.get("signature_matches") or [],
             }
             for r in rows
         ],
