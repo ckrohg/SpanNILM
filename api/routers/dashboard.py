@@ -1,5 +1,6 @@
 """Dashboard endpoint — returns everything the frontend needs in one call."""
 
+import json
 import logging
 import os
 from collections import defaultdict
@@ -20,6 +21,8 @@ from api.models import (
     DetectedDevice,
     TemporalInfo,
     TimelineBucket,
+    TOUPeriod,
+    TOUSchedule,
     UsageTrend,
 )
 
@@ -28,6 +31,16 @@ router = APIRouter(prefix="/api")
 
 DEFAULT_ELECTRICITY_RATE = 0.14  # $/kWh
 EASTERN_OFFSET = timedelta(hours=-4)
+
+PERIOD_LABELS = {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "7d": "Last 7 Days",
+    "30d": "Last 30 Days",
+    "month": "This Month",
+    "year": "This Year",
+    "365d": "Last 365 Days",
+}
 
 
 def _get_spannilm_db():
@@ -50,6 +63,106 @@ def _load_electricity_rate() -> float:
     return DEFAULT_ELECTRICITY_RATE
 
 
+def _load_tou_schedule() -> TOUSchedule:
+    """Load TOU schedule from settings table."""
+    try:
+        conn = _get_spannilm_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT value FROM settings WHERE key = 'tou_schedule'")
+                row = cur.fetchone()
+                if row:
+                    data = json.loads(row[0])
+                    return TOUSchedule(**data)
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.debug("Could not load tou_schedule setting: %s", e)
+    return TOUSchedule(enabled=False)
+
+
+def _get_tou_rate(hour: int, is_weekday: bool, tou: TOUSchedule, flat_rate: float) -> tuple[float, str]:
+    """Return (rate, period_name) for a given hour and day type."""
+    if not tou.enabled:
+        return flat_rate, "flat"
+
+    if tou.peak and hour >= tou.peak.start and hour < tou.peak.end:
+        if not tou.peak.weekdays_only or is_weekday:
+            return tou.peak.rate, "peak"
+
+    if tou.off_peak:
+        # Off-peak wraps around midnight (e.g., 21:00 - 09:00)
+        if tou.off_peak.start > tou.off_peak.end:
+            if hour >= tou.off_peak.start or hour < tou.off_peak.end:
+                return tou.off_peak.rate, "off_peak"
+        else:
+            if hour >= tou.off_peak.start and hour < tou.off_peak.end:
+                return tou.off_peak.rate, "off_peak"
+
+    if tou.mid_peak and hour >= tou.mid_peak.start and hour < tou.mid_peak.end:
+        return tou.mid_peak.rate, "mid_peak"
+
+    return flat_rate, "flat"
+
+
+def _compute_tou_cost(power_w: float, timestamp: datetime, bucket_minutes: float,
+                      tou: TOUSchedule, flat_rate: float) -> float:
+    """Compute cost for a single bucket using TOU rates."""
+    if not tou.enabled:
+        return power_w * (bucket_minutes / 60) / 1000 * flat_rate
+    hour = timestamp.hour
+    is_weekday = timestamp.weekday() < 5
+    rate, _ = _get_tou_rate(hour, is_weekday, tou, flat_rate)
+    return power_w * (bucket_minutes / 60) / 1000 * rate
+
+
+def _compute_period_range(period: str, now_eastern: datetime, eastern) -> tuple[datetime, datetime, str]:
+    """Compute start/end UTC datetimes for the given period. Returns (start, end, label)."""
+    now_utc = now_eastern.astimezone(timezone.utc)
+    label = PERIOD_LABELS.get(period, "Today")
+
+    if period == "today":
+        start = now_eastern.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+        return start, now_utc, label
+    elif period == "yesterday":
+        today_start = now_eastern.replace(hour=0, minute=0, second=0, microsecond=0)
+        start = (today_start - timedelta(days=1)).astimezone(timezone.utc)
+        end = today_start.astimezone(timezone.utc)
+        return start, end, label
+    elif period == "7d":
+        start = (now_utc - timedelta(days=7))
+        return start, now_utc, label
+    elif period == "30d":
+        start = (now_utc - timedelta(days=30))
+        return start, now_utc, label
+    elif period == "month":
+        start = now_eastern.replace(day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+        return start, now_utc, label
+    elif period == "year":
+        start = now_eastern.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+        return start, now_utc, label
+    elif period == "365d":
+        start = (now_utc - timedelta(days=365))
+        return start, now_utc, label
+    else:
+        # Default to today
+        start = now_eastern.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+        return start, now_utc, "Today"
+
+
+def _get_bucket_minutes(period: str) -> int:
+    """Return bucket size in minutes for timeline aggregation."""
+    if period in ("today", "yesterday"):
+        return 10
+    elif period == "7d":
+        return 60
+    elif period in ("30d", "month"):
+        return 360  # 6 hours
+    elif period in ("year", "365d"):
+        return 1440  # daily
+    return 10
+
+
 def _load_circuit_configs() -> dict[str, dict]:
     conn = _get_spannilm_db()
     try:
@@ -60,46 +173,144 @@ def _load_circuit_configs() -> dict[str, dict]:
         conn.close()
 
 
+def _aggregate_timeline(agg_data, bucket_minutes: int) -> list[TimelineBucket]:
+    """Aggregate raw 10-min data into larger buckets for the timeline."""
+    import pandas as pd
+
+    if agg_data.empty:
+        return []
+
+    if bucket_minutes <= 10:
+        # Use the raw 10-min data as-is
+        buckets: dict[str, dict[str, float]] = defaultdict(dict)
+        for _, row in agg_data.iterrows():
+            ts_str = row["timestamp"].isoformat() if hasattr(row["timestamp"], "isoformat") else str(row["timestamp"])
+            buckets[ts_str][row["circuit_name"]] = round(float(row["power_w"]), 1)
+
+        timeline = []
+        for ts_str in sorted(buckets.keys()):
+            circuit_powers = buckets[ts_str]
+            total = sum(circuit_powers.values())
+            timeline.append(TimelineBucket(
+                timestamp=ts_str,
+                total_w=round(total, 1),
+                circuits=circuit_powers,
+            ))
+        return timeline
+
+    # For larger buckets, aggregate by flooring timestamps
+    df = agg_data.copy()
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    freq = f"{bucket_minutes}min"
+    df["bucket"] = df["timestamp"].dt.floor(freq)
+
+    grouped = df.groupby(["bucket", "circuit_name"])["power_w"].mean().reset_index()
+
+    buckets_map: dict[str, dict[str, float]] = defaultdict(dict)
+    for _, row in grouped.iterrows():
+        ts_str = row["bucket"].isoformat()
+        buckets_map[ts_str][row["circuit_name"]] = round(float(row["power_w"]), 1)
+
+    timeline = []
+    for ts_str in sorted(buckets_map.keys()):
+        circuit_powers = buckets_map[ts_str]
+        total = sum(circuit_powers.values())
+        timeline.append(TimelineBucket(
+            timestamp=ts_str,
+            total_w=round(total, 1),
+            circuits=circuit_powers,
+        ))
+    return timeline
+
+
 @router.post("/dashboard", response_model=DashboardResponse)
 def get_dashboard(
     electricity_rate: float | None = Query(default=None, ge=0),
+    period: str = Query(default="today", description="today|yesterday|7d|30d|month|year|365d"),
 ):
     """Return comprehensive dashboard data using 10-min aggregated power data."""
     if electricity_rate is None:
         electricity_rate = _load_electricity_rate()
 
+    tou = _load_tou_schedule()
+
     source = get_tempiq_source()
     now = datetime.now(timezone.utc)
     eastern = timezone(EASTERN_OFFSET)
     now_eastern = now.astimezone(eastern)
+
+    # Compute the time range for the selected period
+    range_start, range_end, period_label = _compute_period_range(period, now_eastern, eastern)
+    bucket_minutes = _get_bucket_minutes(period)
+
+    # We always need "today" and "month" for the secondary display + bill projection
     today_start = now_eastern.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
     month_start = now_eastern.replace(day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
-    yesterday = now - timedelta(hours=24)
 
     configs = _load_circuit_configs()
 
-    # === Use aggregated power data (10-min resolution) for everything ===
     import pandas as pd
-    agg_24h = source.get_aggregated_power(yesterday, now)
-    agg_today = source.get_aggregated_power(today_start, now)
-    agg_month = source.get_aggregated_power(month_start, now)
+    # Fetch data for the requested period
+    agg_period = source.get_aggregated_power(range_start, range_end)
 
-    # 1. Current power: latest reading per circuit from aggregated data
+    # Also fetch today and month if they differ from the period
+    agg_today = None
+    agg_month = None
+    if period != "today":
+        agg_today = source.get_aggregated_power(today_start, now)
+    else:
+        agg_today = agg_period
+
+    if period != "month":
+        agg_month = source.get_aggregated_power(month_start, now)
+    else:
+        agg_month = agg_period
+
+    # For current power, use last 24h data
+    yesterday = now - timedelta(hours=24)
+    if period == "today":
+        # agg_period covers today; for current power we need recent data
+        agg_recent = agg_period
+    else:
+        agg_recent = source.get_aggregated_power(yesterday, now)
+
+    # 1. Current power: latest reading per circuit
     current_power_map: dict[str, dict] = {}
     circuit_names: dict[str, str] = {}
-    if not agg_24h.empty:
-        latest = agg_24h.sort_values("timestamp").groupby("circuit_id").last().reset_index()
+    if not agg_recent.empty:
+        latest = agg_recent.sort_values("timestamp").groupby("circuit_id").last().reset_index()
         for _, row in latest.iterrows():
             cid = str(row["circuit_id"])
             current_power_map[cid] = {"power_w": round(float(row["power_w"]), 1)}
             circuit_names[cid] = row["circuit_name"]
 
-    # 2. Energy totals from aggregated data (sum of energy_wh in each bucket)
-    # The aggregated table has energy_wh per 10-min bucket - we need to query it
+    # 2. Energy totals for the selected period, today, and month
+    energy_period_map: dict[str, float] = {}
     energy_today_map: dict[str, float] = {}
     energy_month_map: dict[str, float] = {}
 
-    # Use avg_power_w * 10min/60 = energy in kWh per bucket
+    # Period energy (with TOU cost calculation)
+    cost_period_map: dict[str, float] = {}
+    if not agg_period.empty:
+        for cid, group in agg_period.groupby("circuit_id"):
+            energy_kwh = float(group["power_w"].sum()) * (10.0 / 60.0) / 1000.0
+            energy_period_map[str(cid)] = energy_kwh
+            if str(cid) not in circuit_names:
+                circuit_names[str(cid)] = group["circuit_name"].iloc[0]
+
+            # TOU cost calculation per bucket
+            if tou.enabled:
+                total_cost = 0.0
+                for _, brow in group.iterrows():
+                    ts = pd.to_datetime(brow["timestamp"], utc=True).to_pydatetime()
+                    ts_eastern = ts.astimezone(eastern)
+                    total_cost += _compute_tou_cost(float(brow["power_w"]), ts_eastern, 10.0, tou, electricity_rate)
+                cost_period_map[str(cid)] = total_cost
+            else:
+                cost_period_map[str(cid)] = energy_kwh * electricity_rate
+
+    # Today energy
+    cost_today_map: dict[str, float] = {}
     if not agg_today.empty:
         for cid, group in agg_today.groupby("circuit_id"):
             energy_kwh = float(group["power_w"].sum()) * (10.0 / 60.0) / 1000.0
@@ -107,6 +318,18 @@ def get_dashboard(
             if str(cid) not in circuit_names:
                 circuit_names[str(cid)] = group["circuit_name"].iloc[0]
 
+            if tou.enabled:
+                total_cost = 0.0
+                for _, brow in group.iterrows():
+                    ts = pd.to_datetime(brow["timestamp"], utc=True).to_pydatetime()
+                    ts_eastern = ts.astimezone(eastern)
+                    total_cost += _compute_tou_cost(float(brow["power_w"]), ts_eastern, 10.0, tou, electricity_rate)
+                cost_today_map[str(cid)] = total_cost
+            else:
+                cost_today_map[str(cid)] = energy_kwh * electricity_rate
+
+    # Month energy
+    cost_month_map: dict[str, float] = {}
     if not agg_month.empty:
         for cid, group in agg_month.groupby("circuit_id"):
             energy_kwh = float(group["power_w"].sum()) * (10.0 / 60.0) / 1000.0
@@ -114,10 +337,20 @@ def get_dashboard(
             if str(cid) not in circuit_names:
                 circuit_names[str(cid)] = group["circuit_name"].iloc[0]
 
-    # 3. Always-on: 10th percentile of power per circuit over 24h
+            if tou.enabled:
+                total_cost = 0.0
+                for _, brow in group.iterrows():
+                    ts = pd.to_datetime(brow["timestamp"], utc=True).to_pydatetime()
+                    ts_eastern = ts.astimezone(eastern)
+                    total_cost += _compute_tou_cost(float(brow["power_w"]), ts_eastern, 10.0, tou, electricity_rate)
+                cost_month_map[str(cid)] = total_cost
+            else:
+                cost_month_map[str(cid)] = energy_kwh * electricity_rate
+
+    # 3. Always-on: 10th percentile of power per circuit over 24h (always use recent data)
     always_on_map: dict[str, float] = {}
-    if not agg_24h.empty:
-        for cid, group in agg_24h.groupby("circuit_id"):
+    if not agg_recent.empty:
+        for cid, group in agg_recent.groupby("circuit_id"):
             p10 = float(np.percentile(group["power_w"].values, 10))
             always_on_map[str(cid)] = max(0, p10)
 
@@ -200,6 +433,8 @@ def get_dashboard(
         e_today = energy_today_map.get(equip_id, 0.0)
         e_month = energy_month_map.get(equip_id, 0.0)
         ao_w = always_on_map.get(equip_id, 0.0)
+        c_today = cost_today_map.get(equip_id, e_today * electricity_rate)
+        c_month = cost_month_map.get(equip_id, e_month * electricity_rate)
 
         circuits.append(CircuitPower(
             equipment_id=equip_id,
@@ -209,8 +444,8 @@ def get_dashboard(
             device_type=device_type,
             energy_today_kwh=round(e_today, 2),
             energy_month_kwh=round(e_month, 2),
-            cost_today=round(e_today * electricity_rate, 2),
-            cost_month=round(e_month * electricity_rate, 2),
+            cost_today=round(c_today, 2),
+            cost_month=round(c_month, 2),
             always_on_w=round(ao_w, 1),
             detected_devices=profile_devices.get(equip_id, []),
             temporal=profile_temporal.get(equip_id),
@@ -219,28 +454,16 @@ def get_dashboard(
 
     circuits.sort(key=lambda c: c.power_w, reverse=True)
 
-    # 6. Stacked timeline from aggregated data (already at 10-min resolution)
-    timeline: list[TimelineBucket] = []
-    if not agg_24h.empty:
-        buckets: dict[str, dict[str, float]] = defaultdict(dict)
-        for _, row in agg_24h.iterrows():
-            ts_str = row["timestamp"].isoformat() if hasattr(row["timestamp"], "isoformat") else str(row["timestamp"])
-            buckets[ts_str][row["circuit_name"]] = round(float(row["power_w"]), 1)
-
-        for ts_str in sorted(buckets.keys()):
-            circuit_powers = buckets[ts_str]
-            total = sum(circuit_powers.values())
-            timeline.append(TimelineBucket(
-                timestamp=ts_str,
-                total_w=round(total, 1),
-                circuits=circuit_powers,
-            ))
+    # 6. Timeline from period data, aggregated to appropriate bucket size
+    timeline = _aggregate_timeline(agg_period, bucket_minutes)
 
     # 7. Totals
     total_power_w = sum(c.power_w for c in circuits)
     total_always_on_w = sum(c.always_on_w for c in circuits)
     total_energy_today = sum(c.energy_today_kwh for c in circuits)
     total_energy_month = sum(c.energy_month_kwh for c in circuits)
+    total_cost_today = sum(cost_today_map.get(c.equipment_id, c.energy_today_kwh * electricity_rate) for c in circuits)
+    total_cost_month = sum(cost_month_map.get(c.equipment_id, c.energy_month_kwh * electricity_rate) for c in circuits)
 
     # 8. Bill projection
     import calendar
@@ -252,9 +475,14 @@ def get_dashboard(
     if days_elapsed > 0 and total_energy_month > 0:
         daily_avg_kwh = total_energy_month / days_elapsed
         projected_kwh = daily_avg_kwh * days_in_month
+        projected_cost = projected_kwh * electricity_rate
+        if tou.enabled and total_energy_month > 0:
+            # Scale TOU cost to projected full month
+            avg_tou_rate = total_cost_month / total_energy_month if total_energy_month > 0 else electricity_rate
+            projected_cost = projected_kwh * avg_tou_rate
         bill_projection = BillProjection(
             projected_monthly_kwh=round(projected_kwh, 1),
-            projected_monthly_cost=round(projected_kwh * electricity_rate, 2),
+            projected_monthly_cost=round(projected_cost, 2),
             days_elapsed=days_elapsed,
             days_remaining=days_remaining,
             daily_avg_kwh=round(daily_avg_kwh, 1),
@@ -325,6 +553,14 @@ def get_dashboard(
     except Exception as e:
         logger.debug("Could not compute usage trends: %s", e)
 
+    # Current TOU rate info
+    current_tou_rate = None
+    current_tou_period_name = None
+    if tou.enabled:
+        hour_now = now_eastern.hour
+        is_weekday_now = now_eastern.weekday() < 5
+        current_tou_rate, current_tou_period_name = _get_tou_rate(hour_now, is_weekday_now, tou, electricity_rate)
+
     return DashboardResponse(
         total_power_w=round(total_power_w, 1),
         always_on_w=round(total_always_on_w, 1),
@@ -332,11 +568,16 @@ def get_dashboard(
         circuits=circuits,
         timeline=timeline,
         total_energy_today_kwh=round(total_energy_today, 2),
-        total_cost_today=round(total_energy_today * electricity_rate, 2),
+        total_cost_today=round(total_cost_today, 2),
         total_energy_month_kwh=round(total_energy_month, 2),
-        total_cost_month=round(total_energy_month * electricity_rate, 2),
+        total_cost_month=round(total_cost_month, 2),
         electricity_rate=electricity_rate,
         bill_projection=bill_projection,
         top_cost_drivers=top_cost_drivers,
         trends=trends,
+        period=period,
+        period_label=period_label,
+        tou_schedule=tou if tou.enabled else None,
+        current_tou_rate=current_tou_rate,
+        current_tou_period_name=current_tou_period_name,
     )

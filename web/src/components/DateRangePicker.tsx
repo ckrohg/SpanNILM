@@ -1,11 +1,15 @@
-export type DateRange = 'today' | 'yesterday' | '7days' | '30days' | 'month'
+import type { DateRange } from '../lib/api'
+
+export type { DateRange }
 
 const OPTIONS: { value: DateRange; label: string }[] = [
   { value: 'today', label: 'Today' },
   { value: 'yesterday', label: 'Yesterday' },
-  { value: '7days', label: '7 Days' },
-  { value: '30days', label: '30 Days' },
+  { value: '7d', label: '7 Days' },
+  { value: '30d', label: '30 Days' },
   { value: 'month', label: 'This Month' },
+  { value: 'year', label: 'This Year' },
+  { value: '365d', label: '365 Days' },
 ]
 
 interface Props {

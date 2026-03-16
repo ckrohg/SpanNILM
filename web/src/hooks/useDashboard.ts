@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DashboardData, fetchDashboard } from '../lib/api'
+import type { DateRange } from '../lib/api'
 
-export function useDashboard() {
+export function useDashboard(period: DateRange = 'today') {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -10,14 +11,14 @@ export function useDashboard() {
   const refresh = useCallback(() => {
     setLoading(true)
     setError(null)
-    fetchDashboard()
+    fetchDashboard(period)
       .then((d) => {
         setData(d)
         setLastUpdated(new Date())
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [])
+  }, [period])
 
   useEffect(() => {
     refresh()

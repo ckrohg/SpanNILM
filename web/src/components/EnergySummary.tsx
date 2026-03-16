@@ -1,5 +1,4 @@
-import type { CircuitPower } from '../lib/api'
-import type { DateRange } from './DateRangePicker'
+import type { CircuitPower, DateRange } from '../lib/api'
 
 function formatEnergy(kwh: number): string {
   if (kwh >= 100) return `${Math.round(kwh)} kWh`
@@ -14,9 +13,11 @@ function formatCost(dollars: number): string {
 const RANGE_LABELS: Record<DateRange, string> = {
   today: 'Today',
   yesterday: 'Yesterday',
-  '7days': 'Last 7 Days',
-  '30days': 'Last 30 Days',
+  '7d': 'Last 7 Days',
+  '30d': 'Last 30 Days',
   month: 'This Month',
+  year: 'This Year',
+  '365d': 'Last 365 Days',
 }
 
 interface Props {
@@ -37,7 +38,7 @@ export default function EnergySummary({
   dateRange = 'today',
 }: Props) {
   // Determine which data to show based on dateRange
-  const isMonthView = dateRange === 'month' || dateRange === '30days'
+  const isMonthView = dateRange === 'month' || dateRange === '30d' || dateRange === 'year' || dateRange === '365d'
   const displayEnergy = isMonthView ? totalEnergyMonth : totalEnergyToday
   const displayCost = isMonthView ? totalCostMonth : totalCostToday
   const displayLabel = RANGE_LABELS[dateRange]

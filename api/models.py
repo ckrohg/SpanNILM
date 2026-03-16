@@ -159,6 +159,20 @@ class UsageTrend(BaseModel):
     direction: str  # up, down, stable
 
 
+class TOUPeriod(BaseModel):
+    start: int  # hour 0-23
+    end: int
+    rate: float
+    weekdays_only: bool = False
+
+
+class TOUSchedule(BaseModel):
+    enabled: bool = False
+    peak: TOUPeriod | None = None
+    off_peak: TOUPeriod | None = None
+    mid_peak: TOUPeriod | None = None
+
+
 class DashboardResponse(BaseModel):
     total_power_w: float
     always_on_w: float
@@ -173,6 +187,11 @@ class DashboardResponse(BaseModel):
     bill_projection: BillProjection | None = None
     top_cost_drivers: list[CostAttribution] = []
     trends: list[UsageTrend] = []
+    period: str = "today"
+    period_label: str = "Today"
+    tou_schedule: TOUSchedule | None = None
+    current_tou_rate: float | None = None
+    current_tou_period_name: str | None = None
 
 
 class DailyEnergy(BaseModel):

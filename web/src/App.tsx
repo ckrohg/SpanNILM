@@ -14,9 +14,27 @@ import Circuits from './pages/Circuits'
 import CircuitDetail from './pages/CircuitDetail'
 import DeviceDetail from './pages/DeviceDetail'
 import Settings from './pages/Settings'
-import DateRangePicker, { type DateRange } from './components/DateRangePicker'
+import DateRangePicker from './components/DateRangePicker'
+import type { DateRange } from './lib/api'
 
 type Page = 'dashboard' | 'circuits' | 'settings' | 'detail' | 'device_detail'
+
+const PERIOD_LABELS: Record<DateRange, string> = {
+  today: 'Today',
+  yesterday: 'Yesterday',
+  '7d': 'Last 7 Days',
+  '30d': 'Last 30 Days',
+  month: 'This Month',
+  year: 'This Year',
+  '365d': 'Last 365 Days',
+}
+
+const TOU_PERIOD_LABELS: Record<string, string> = {
+  peak: 'Peak',
+  off_peak: 'Off-Peak',
+  mid_peak: 'Mid-Peak',
+  flat: 'Flat',
+}
 
 function formatPower(w: number): string {
   return w >= 1000 ? `${(w / 1000).toFixed(1)} kW` : `${Math.round(w)} W`
@@ -68,12 +86,30 @@ function LastUpdated({ date }: { date: Date | null }) {
   )
 }
 
+function TOUBadge({ periodName, rate }: { periodName: string; rate: number }) {
+  const label = TOU_PERIOD_LABELS[periodName] || periodName
+  const colorClasses =
+    periodName === 'peak'
+      ? 'bg-red-900/40 border-red-800/50 text-red-300'
+      : periodName === 'off_peak'
+        ? 'bg-green-900/40 border-green-800/50 text-green-300'
+        : periodName === 'mid_peak'
+          ? 'bg-yellow-900/40 border-yellow-800/50 text-yellow-300'
+          : 'bg-gray-800/40 border-gray-700/50 text-gray-300'
+
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full border ${colorClasses}`}>
+      {label}: ${rate.toFixed(2)}/kWh
+    </span>
+  )
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
   const [selectedCircuit, setSelectedCircuit] = useState<string | null>(null)
   const [selectedDevice, setSelectedDevice] = useState<{ equipmentId: string; clusterId: number } | null>(null)
   const [dateRange, setDateRange] = useState<DateRange>('today')
-  const { data: dashboard, loading, error, refresh, lastUpdated } = useDashboard()
+  const { data: dashboard, loading, error, refresh, lastUpdated } = useDashboard(dateRange)
 
 
   return (
@@ -111,7 +147,12 @@ export default function App() {
                 <div className="text-[10px] sm:text-xs text-gray-500">
                   {formatPower(dashboard.active_power_w)} active &middot; {formatPower(dashboard.always_on_w)} always on
                 </div>
-                <LastUpdated date={lastUpdated} />
+                <div className="flex items-center gap-2">
+                  {dashboard.current_tou_rate != null && dashboard.current_tou_period_name && (
+                    <TOUBadge periodName={dashboard.current_tou_period_name} rate={dashboard.current_tou_rate} />
+                  )}
+                  <LastUpdated date={lastUpdated} />
+                </div>
               </div>
             </div>
           )}
@@ -137,6 +178,11 @@ export default function App() {
 
         {page === 'dashboard' && (
           <>
+            {/* Date Range Picker — at the top */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <DateRangePicker value={dateRange} onChange={setDateRange} />
+            </div>
+
             {loading && (
               <div className="flex items-center justify-center py-20">
                 <div className="flex items-center gap-3 text-gray-400">
@@ -201,7 +247,7 @@ export default function App() {
                 {/* Stacked timeline */}
                 <section>
                   <h2 className="text-sm font-medium text-gray-400 mb-2">
-                    Power Timeline (24h)
+                    Power Timeline — {PERIOD_LABELS[dateRange]}
                   </h2>
                   <StackedTimeline
                     timeline={dashboard.timeline}
@@ -222,13 +268,12 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Energy summary with date range picker */}
+                {/* Energy summary */}
                 <section>
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                     <h2 className="text-sm font-medium text-gray-400">
-                      Energy Usage
+                      Energy Usage — {PERIOD_LABELS[dateRange]}
                     </h2>
-                    <DateRangePicker value={dateRange} onChange={setDateRange} />
                   </div>
                   <EnergySummary
                     circuits={dashboard.circuits}

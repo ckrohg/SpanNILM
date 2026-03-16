@@ -186,6 +186,20 @@ export interface UsageTrend {
   direction: 'up' | 'down' | 'stable'
 }
 
+export interface TOUPeriod {
+  start: number
+  end: number
+  rate: number
+  weekdays_only?: boolean
+}
+
+export interface TOUSchedule {
+  enabled: boolean
+  peak?: TOUPeriod | null
+  off_peak?: TOUPeriod | null
+  mid_peak?: TOUPeriod | null
+}
+
 export interface DashboardData {
   total_power_w: number
   always_on_w: number
@@ -200,6 +214,11 @@ export interface DashboardData {
   bill_projection: BillProjection | null
   top_cost_drivers: CostAttribution[]
   trends: UsageTrend[]
+  period: string
+  period_label: string
+  tou_schedule: TOUSchedule | null
+  current_tou_rate: number | null
+  current_tou_period_name: string | null
 }
 
 export interface DailyEnergy {
@@ -233,8 +252,10 @@ export interface CircuitDetailData {
   anomalies: Anomaly[]
 }
 
-export async function fetchDashboard(): Promise<DashboardData> {
-  const res = await fetch(`${API_URL}/api/dashboard`, { method: 'POST' })
+export type DateRange = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'year' | '365d'
+
+export async function fetchDashboard(period: DateRange = 'today'): Promise<DashboardData> {
+  const res = await fetch(`${API_URL}/api/dashboard?period=${period}`, { method: 'POST' })
   if (!res.ok) throw new Error(`Dashboard failed: ${res.status}`)
   return res.json()
 }

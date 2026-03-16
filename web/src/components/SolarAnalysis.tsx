@@ -22,11 +22,24 @@ export default function SolarAnalysis({ data }: Props) {
     }).catch(() => {})
   }, [])
 
-  const { timeline, electricity_rate, bill_projection } = data
+  const { timeline, electricity_rate, bill_projection, tou_schedule } = data
 
   if (timeline.length === 0) return null
 
   const rate = electricity_rate || 0.14
+  const hasTou = tou_schedule?.enabled === true
+
+  // Calculate effective solar rate — solar production during peak hours is worth more
+  let solarEffectiveRate = rate
+  if (hasTou && tou_schedule) {
+    // Solar peak production (10am-3pm) typically overlaps with mid-peak or peak
+    // Weight the rate by approximate solar production distribution
+    const peakRate = tou_schedule.peak?.rate ?? rate
+    const midPeakRate = tou_schedule.mid_peak?.rate ?? rate
+    const offPeakRate = tou_schedule.off_peak?.rate ?? rate
+    // ~80% of solar production is during mid-peak/peak hours, ~20% off-peak edges
+    solarEffectiveRate = peakRate * 0.3 + midPeakRate * 0.5 + offPeakRate * 0.2
+  }
   const hasQuote = solarPayment > 0 && solarAnnualKwh > 0
 
   // Usage analysis from timeline
@@ -65,19 +78,22 @@ export default function SolarAnalysis({ data }: Props) {
     let annualSavingsFromSolar: number
     let remainingGridKwh: number
 
+    // Use effective solar rate (accounts for TOU value of solar production)
+    const effectiveRate = hasTou ? solarEffectiveRate : rate
+
     if (netMetering) {
       // Net metering: all production counts at retail rate, even excess
       const effectiveOffset = Math.min(solarAnnualKwh, annualUsageKwh)
-      annualSavingsFromSolar = effectiveOffset * rate
+      annualSavingsFromSolar = effectiveOffset * effectiveRate
       // If solar > usage, excess is credited but capped at annual usage
       if (solarAnnualKwh > annualUsageKwh) {
-        annualSavingsFromSolar = annualUsageKwh * rate // bill goes to $0
+        annualSavingsFromSolar = annualUsageKwh * effectiveRate // bill goes to $0
       }
       remainingGridKwh = Math.max(0, annualUsageKwh - solarAnnualKwh)
     } else {
       // No net metering: only save on what you use during solar hours
       const usableSolar = Math.min(solarDailyKwh, daytimeKwhPerDay)
-      annualSavingsFromSolar = usableSolar * 365 * rate
+      annualSavingsFromSolar = usableSolar * 365 * effectiveRate
       remainingGridKwh = annualUsageKwh - (usableSolar * 365)
     }
 
@@ -139,6 +155,12 @@ export default function SolarAnalysis({ data }: Props) {
             <span className="text-gray-500">Net metering</span>
             <span className="text-gray-300">{netMetering ? 'Yes — excess credited' : 'No — excess lost'}</span>
           </div>
+          {hasTou && (
+            <div className="flex justify-between py-1 border-b border-gray-800/30">
+              <span className="text-gray-500">TOU solar value</span>
+              <span className="text-yellow-400">${solarEffectiveRate.toFixed(3)}/kWh avg (peak hours worth more)</span>
+            </div>
+          )}
           <div className="flex justify-between py-1 border-b border-gray-800/30">
             <span className="text-gray-500">Electricity saved</span>
             <span className="text-green-400">${annualSavingsFromSolar.toFixed(0)}/yr</span>
