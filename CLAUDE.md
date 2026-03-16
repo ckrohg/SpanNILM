@@ -55,8 +55,9 @@ TempIQ Supabase (read-only)          SpanNILM Supabase (read-write)
 ## Stack
 - **Backend**: Python 3.12 + FastAPI + psycopg2 + anthropic SDK + scipy + sklearn
 - **Frontend**: React 18 + Vite + TypeScript + Tailwind (dark mode: class) + Recharts
-- **AI**: Claude Haiku for device naming from power characteristics
-- **Detection**: Shape-based HDBSCAN clustering on 76-dim feature vectors from 10-min aggregated data
+- **AI**: Claude Haiku (per-device naming) + Claude Sonnet (circuit analysis + home reconciliation)
+- **ML**: Random Forest classifier trained on dedicated circuits + HDBSCAN shape clustering
+- **Detection**: Multi-stage pipeline: decomposition → shape clustering → signature matching → ML → LLM adjudication
 
 ## Code Structure
 ```
@@ -154,8 +155,23 @@ The Claude prompt includes: all dedicated circuits (to avoid suggesting them), a
 ### Signature Database
 `device_signatures.yaml` — 50+ device types with fields: power_range, duration_range, duty_cycle_pattern, typical_locations, typical_hours, seasonal, cycling_on_s, cycling_off_s, power_stability. Categories: HVAC, Kitchen, Laundry, Water, Basement, Barn, Electronics, General.
 
-### Dashboard API
-`POST /api/dashboard?period=today` — accepts: today, yesterday, 7d, 30d, month, year, 365d. Returns: circuits with power/energy/devices, timeline, bill projection, trends, TOU schedule, always-on. All data from aggregated table.
+### API Endpoints
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/dashboard?period=today` | POST | Main dashboard data (circuits, timeline, bill, trends, always-on) |
+| `/api/circuits/config` | GET | Circuit configs (dedicated/shared) |
+| `/api/circuits/{id}` | PUT | Update circuit config |
+| `/api/circuit/{id}/detail?days=7` | GET | Per-circuit deep dive (power series, daily energy, anomalies) |
+| `/api/devices/{eid}/{cid}/detail?days=30` | GET | Per-device session history |
+| `/api/devices/{eid}/{cid}/suggest` | POST | Claude AI name suggestions for a device |
+| `/api/devices/{eid}/{cid}/name` | PUT | Save user-confirmed device name |
+| `/api/devices/auto-name` | POST | Batch AI naming on all unnamed devices |
+| `/api/analyze/llm` | POST | Run LLM Mode B (circuit stories) + Mode C (home reconciliation) |
+| `/api/profile?days=90` | POST | Run full detection pipeline + save results |
+| `/api/profile` | GET | Retrieve stored profiles |
+| `/api/forecast` | GET | Annual energy forecast with degree-day regression |
+| `/api/settings` | GET/PUT | User settings (rate, TOU, solar, timezone) |
+| `/health` | GET | Health check |
 
 ### User Feedback Loop
 - `device_labels` table: equipment_id, cluster_id, name, source (user/ai_auto/ai_confirmed)
@@ -177,6 +193,40 @@ Air-Water 1 (Heat Pump), Air-Water 2 (Heat Pump), Mini Split - Office/Living Roo
 - `circuit_profiles` — profiling results (states, shape_devices, temporal, correlations, decomposed_devices, llm_analysis, signature_matches)
 - `settings` — key-value settings (electricity_rate, tou_schedule, solar_*, timezone)
 - `model_artifacts` — serialized ML models (Random Forest, pretrained distributions)
+
+## Detection Success Criteria
+
+### Per-Circuit Targets
+| Circuit | Before (v1) | Target (v2) | What to Find |
+|---------|-------------|-------------|-------------|
+| Basement Sub Panel | 2-5 "multi-stage loads" | 8-12 distinct devices | Dehumidifier, chest freezer, sump pump, server, baseload |
+| Barn Sub Panel | 3 generic loads | 6-10 devices | Space heater, barn lighting, livestock pump, tools, baseload |
+| 2nd Floor Sub Panel | 2 generic loads | 5-8 devices | Bathroom exhaust, space heater, electronics, baseload |
+| Lights/Outlets | 3 devices (ceiling fan) | 4-6 devices | Ceiling fan, TV/entertainment, chargers, baseload |
+| Hydronic Zone Pumps | 1 device | 2-4 devices | Zone pumps (1-4x), control board standby |
+| Garage Door Opener | 1 device | 2-3 devices | Garage door motor, light, outlet load |
+| Hydronic Glycol Feeder | 0 devices | 1-2 devices | Glycol pump, control board |
+
+### Quality Metrics
+- **No HVAC false positives**: shared circuits should NOT be labeled as heat pumps/compressors when HVAC is already on dedicated circuits (Bayesian prior handles this)
+- **Specific names > generic**: "Basement Dehumidifier" not "Cycling compressor"; "Barn Space Heater" not "Heating/cooling (1kW)"
+- **Confidence calibration**: user-confirmed devices should be 0.9+; ML-matched should be 0.6-0.8; signature-only should be 0.3-0.6
+- **LLM reconciliation**: no duplicate device types across circuits that don't make sense (e.g., 3 dehumidifiers); common missing devices flagged
+- **Sub-panel decomposition**: each sub-panel should show baseload + 3-10 distinct power-level devices (matching step-change analysis)
+
+### How to Validate
+1. `POST /api/profile?days=90` — re-runs full pipeline
+2. `POST /api/devices/auto-name` — AI names all unnamed devices
+3. `POST /api/analyze/llm` — runs Mode B (circuit stories) + Mode C (home reconciliation)
+4. Dashboard → expand each shared circuit → verify device count and names
+5. Dashboard → Learned Devices section → confirm/reject → names persist across re-runs
+6. Categories page → verify devices categorized correctly (no HVAC on sub-panels)
+
+### Key Limitations (known)
+- **10-min resolution**: can't detect devices that run < 10 min (microwave, blender, toaster)
+- **Overlapping devices**: decomposer assumes step changes — gradual ramps (dimmer switches) are missed
+- **Similar power levels**: two 500W devices on same circuit that always run at different times look like one device
+- **No reactive power**: can't distinguish motor loads from resistive loads by power factor (SPAN only provides real power)
 
 ## Deployment Notes
 - `git -c user.email=ckrohg@me.com commit` — must use this email
