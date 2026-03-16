@@ -57,8 +57,8 @@ function NavLink({
       onClick={onClick}
       className={`px-3 py-1.5 text-sm rounded-lg transition-colors whitespace-nowrap ${
         active
-          ? 'bg-gray-800 text-white'
-          : 'text-gray-500 hover:text-gray-300'
+          ? 'bg-gray-200 text-gray-900 dark:bg-gray-800 dark:text-white'
+          : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
       }`}
     >
       {children}
@@ -113,18 +113,25 @@ export default function App() {
   const [selectedDevice, setSelectedDevice] = useState<{ equipmentId: string; clusterId: number } | null>(null)
   const [dateRange, setDateRange] = useState<DateRange>('today')
   const { data: dashboard, loading, error, refresh, lastUpdated } = useDashboard(dateRange)
+  const [theme, setTheme] = useState<'dark' | 'light'>(
+    () => (localStorage.getItem('theme') as 'dark' | 'light') || 'dark'
+  )
 
+  useEffect(() => {
+    localStorage.setItem('theme', theme)
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+  }, [theme])
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <header className="border-b border-gray-800 px-3 sm:px-6 py-3 sm:py-4">
+    <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-950 dark:text-white">
+      <header className="border-b border-gray-200 dark:border-gray-800 px-3 sm:px-6 py-3 sm:py-4">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
           <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
             <div
               className="flex items-center gap-2 sm:gap-3 cursor-pointer flex-shrink-0"
               onClick={() => setPage('dashboard')}
             >
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-600 flex items-center justify-center text-xs sm:text-sm font-bold">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-600 flex items-center justify-center text-xs sm:text-sm font-bold text-white">
                 S
               </div>
               <h1 className="text-base sm:text-lg font-semibold">SpanNILM</h1>
@@ -143,15 +150,30 @@ export default function App() {
                 Settings
               </NavLink>
             </nav>
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="ml-auto sm:ml-2 p-1.5 rounded-lg text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+                </svg>
+              )}
+            </button>
           </div>
           {dashboard && page === 'dashboard' && (
             <div className="text-left sm:text-right flex sm:block items-center gap-3 sm:gap-0">
               <div className="text-2xl sm:text-3xl font-mono font-bold">
-                {formatPower(dashboard.total_power_w)}
+                ${dashboard.total_cost_today.toFixed(2)} <span className="text-sm font-normal text-gray-500">today</span>
               </div>
               <div className="flex flex-col sm:items-end">
                 <div className="text-[10px] sm:text-xs text-gray-500">
-                  {formatPower(dashboard.active_power_w)} active &middot; {formatPower(dashboard.always_on_w)} always on
+                  {dashboard.total_energy_today_kwh.toFixed(1)} kWh &middot; {formatPower(dashboard.total_power_w)} now
                 </div>
                 <div className="flex items-center gap-2">
                   {dashboard.current_tou_rate != null && dashboard.current_tou_period_name && (

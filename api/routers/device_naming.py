@@ -120,33 +120,61 @@ def _build_suggest_prompt(template: dict) -> str:
 
     curve_str = ", ".join(f"{v:.3f}" for v in template_curve) if template_curve else "N/A"
 
-    return f"""You are analyzing power consumption data from a residential electrical circuit to identify what device is producing this pattern.
+    # Load dedicated circuit info to tell Claude what's already accounted for
+    dedicated_info = ""
+    try:
+        conn = _get_spannilm_db()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT name, dedicated_device_type FROM circuits WHERE is_dedicated = true")
+                dedicated = cur.fetchall()
+                if dedicated:
+                    ded_list = [f"- {r['name']}: {r['dedicated_device_type']}" for r in dedicated]
+                    dedicated_info = "\n".join(ded_list)
+        finally:
+            conn.close()
+    except Exception:
+        pass
 
-Circuit: {circuit_name}
-Average power: {avg_power}W
-Peak power: {peak_power}W
-Number of phases: {num_phases} (distinct power levels within a session)
-Has startup surge: {has_surge}
-Average session duration: {avg_duration:.1f} minutes
-Sessions per day: {sessions_per_day}
-Peak usage hours: {peak_hours}
-Is cycling: {is_cycling}
-Duty cycle: {duty_cycle:.1%}
-Energy per session: {energy_per_session}Wh
-Correlated circuits: {corr_str}
+    is_sub_panel = "sub panel" in circuit_name.lower() or "subpanel" in circuit_name.lower()
 
-Power curve shape (normalized 0-1, 32 samples across session duration):
+    return f"""You are analyzing a power consumption pattern detected on a residential electrical circuit in a home in New England (MA). Your job is to identify what specific device or appliance is producing this pattern.
+
+IMPORTANT CONTEXT:
+This home already has these devices on DEDICATED circuits (already identified — do NOT suggest these):
+{dedicated_info or "No dedicated circuits configured"}
+
+The device you're identifying is on circuit "{circuit_name}".
+{"This is a SUB-PANEL circuit — it feeds multiple outlets/loads in that area. The detected pattern is one specific load among potentially many on this sub-panel. Think about what appliances/devices are commonly found in a " + circuit_name.lower().replace("sub panel", "").strip() + "." if is_sub_panel else ""}
+
+DEVICE MEASUREMENTS:
+- Average power: {avg_power}W
+- Peak power: {peak_power}W
+- Power stages: {num_phases} (distinct power levels during operation)
+- Has startup surge: {has_surge}
+- Average session duration: {avg_duration:.1f} minutes
+- Sessions per day: {sessions_per_day}
+- Peak usage hours: {peak_hours}
+- Is cycling (regular on/off): {is_cycling}
+- Duty cycle: {duty_cycle:.1%}
+- Energy per session: {energy_per_session}Wh
+
+Power curve shape (normalized 0-1, 32 points across session):
 [{curve_str}]
 
-Based on this data, suggest 2-3 specific device names that could produce this pattern. Consider:
-- The circuit name gives context about location/purpose
-- Power level and phases indicate device type
-- Duration and cycling indicate operating pattern
-- Peak hours indicate usage schedule
-- Correlated circuits suggest linked systems
+Correlated circuits (activate at same time): {corr_str}
 
-Return ONLY a JSON array of objects with "name" and "reasoning" fields. Be specific (e.g., "Mitsubishi Mini-Split Compressor" not just "HVAC"). Example:
-[{{"name": "Electric Baseboard Heater", "reasoning": "Steady 1.3kW draw with long sessions matches resistive heating element"}}]"""
+GUIDELINES:
+- Do NOT suggest HVAC/heat pump/compressor if those are already on dedicated circuits above
+- For sub-panel circuits, think about what's in that area: basement (sump pump, dehumidifier, workshop tools, server/network equipment, chest freezer), barn (heaters, lighting, tools, water trough heater), 2nd floor (space heater, bathroom fan, entertainment system), garage (door opener, charger, fridge)
+- Consider common household devices: space heaters, dehumidifiers, chest freezers, sump pumps, bathroom exhaust fans, entertainment centers, computers/servers, aquariums, pool equipment, hot tubs
+- 10-100W sustained: electronics, fans, chargers, LED lighting, network equipment
+- 100-500W: small motors, dehumidifiers, bathroom fans, computer equipment
+- 500-1500W: space heaters, chest freezers (cycling), power tools, kitchen appliances
+- 1500-3000W: large heaters, shop equipment, large motors
+
+Return ONLY a JSON array of 2-3 objects with "name" and "reasoning" fields. Be specific about the device, not generic categories.
+Example: [{{"name": "Basement Dehumidifier", "reasoning": "580W cycling pattern with 30-min on/off matches a dehumidifier compressor"}}]"""
 
 
 def _parse_claude_suggestions(response_text: str) -> list[dict]:
