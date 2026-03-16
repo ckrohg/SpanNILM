@@ -211,6 +211,8 @@ export default function AnnualForecast() {
               <th className="text-left py-2 pr-2">Month</th>
               <th className="text-right py-2 px-2">Usage</th>
               <th className="text-right py-2 px-2">Temp</th>
+              <th className="text-right py-2 px-2">HDD</th>
+              <th className="text-right py-2 px-2">Method</th>
               <th className="text-right py-2 px-2">Cost</th>
               {has_solar_quote && (
                 <>
@@ -239,6 +241,20 @@ export default function AnnualForecast() {
                 <td className="text-right py-1.5 px-2 font-mono text-orange-400/70">
                   {m.avg_temp_f}°
                 </td>
+                <td className="text-right py-1.5 px-2 font-mono text-gray-500">
+                  {m.hdd > 0 ? m.hdd.toFixed(0) : '-'}
+                </td>
+                <td className="text-right py-1.5 px-2">
+                  <span className={`text-[9px] px-1 py-0.5 rounded ${
+                    m.method === 'actual' ? 'bg-green-900/30 text-green-400' :
+                    m.method === 'scaled_partial' ? 'bg-yellow-900/30 text-yellow-400' :
+                    'bg-blue-900/30 text-blue-400'
+                  }`}>
+                    {m.method === 'actual' ? `${m.data_days}d actual` :
+                     m.method === 'scaled_partial' ? `${m.data_days}d scaled` :
+                     'projected'}
+                  </span>
+                </td>
                 <td className="text-right py-1.5 px-2 font-mono text-gray-300">
                   ${Math.round(m.cost_without_solar)}
                 </td>
@@ -264,6 +280,8 @@ export default function AnnualForecast() {
               <td className="text-right py-2 px-2 font-mono text-white">
                 {Math.round(forecast.annual_usage_kwh).toLocaleString()}
               </td>
+              <td className="text-right py-2 px-2 font-mono text-gray-600">--</td>
+              <td className="text-right py-2 px-2 font-mono text-gray-600">--</td>
               <td className="text-right py-2 px-2 font-mono text-gray-600">--</td>
               <td className="text-right py-2 px-2 font-mono text-white">
                 {formatCurrency(forecast.annual_cost_without_solar)}
@@ -304,6 +322,25 @@ export default function AnnualForecast() {
           </p>
         </div>
       )}
+
+      {/* Methodology explanation */}
+      <details className="mt-4 text-xs">
+        <summary className="text-gray-500 cursor-pointer hover:text-gray-400 transition-colors">
+          How is this forecast calculated?
+        </summary>
+        <div className="mt-2 bg-gray-800/30 border border-gray-800/50 rounded-lg px-4 py-3 space-y-2">
+          <p className="text-gray-400 leading-relaxed">{forecast.methodology}</p>
+          {forecast.regression_formula && (
+            <p className="text-gray-500 font-mono text-[11px] bg-gray-900/50 px-3 py-1.5 rounded">
+              {forecast.regression_formula}
+            </p>
+          )}
+          <p className="text-gray-500">
+            {forecast.data_months} months with actual data. Months with fewer than 80% of days are scaled proportionally.
+            Temperature data uses historical New England (Boston area) averages.
+          </p>
+        </div>
+      </details>
     </div>
   )
 }

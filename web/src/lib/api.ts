@@ -390,6 +390,10 @@ export interface MonthlyForecast {
   solar_production_kwh: number
   cost_with_solar: number
   savings: number
+  method: string
+  data_days: number
+  hdd: number
+  cdd: number
 }
 
 export interface AnnualForecastData {
@@ -400,6 +404,9 @@ export interface AnnualForecastData {
   annual_savings: number
   solar_monthly_payment: number
   has_solar_quote: boolean
+  methodology: string
+  data_months: number
+  regression_formula: string | null
 }
 
 export async function fetchForecast(): Promise<AnnualForecastData> {

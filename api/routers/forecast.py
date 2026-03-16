@@ -59,6 +59,10 @@ class MonthlyForecast(BaseModel):
     solar_production_kwh: float
     cost_with_solar: float
     savings: float
+    method: str  # 'actual', 'scaled_partial', 'degree_day_regression', 'average_fallback'
+    data_days: int  # how many days of actual data this month has
+    hdd: float  # heating degree days
+    cdd: float  # cooling degree days
 
 
 class AnnualForecastResponse(BaseModel):
@@ -69,6 +73,9 @@ class AnnualForecastResponse(BaseModel):
     annual_savings: float
     solar_monthly_payment: float
     has_solar_quote: bool
+    methodology: str  # explanation of how the forecast was built
+    data_months: int  # how many months have actual data
+    regression_formula: str | None  # the regression formula if used
 
 
 # ---------------------------------------------------------------------------
@@ -85,8 +92,8 @@ def _cdd(temp_f: float) -> float:
     return max(0.0, temp_f - 65.0)
 
 
-def _get_historical_monthly(property_id: str) -> dict[int, float]:
-    """Return {month_number: total_kwh} from span_circuit_aggregations."""
+def _get_historical_monthly(property_id: str) -> dict[int, dict]:
+    """Return {month_number: {kwh, data_days, is_partial, raw_kwh}} from span_circuit_aggregations."""
     conn = _tempiq_db()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -96,7 +103,8 @@ def _get_historical_monthly(property_id: str) -> dict[int, float]:
                     EXTRACT(MONTH FROM bucket_start)::int AS month,
                     SUM(energy_wh::float) / 1000.0 AS total_kwh,
                     MIN(bucket_start) AS first_bucket,
-                    MAX(bucket_start) AS last_bucket
+                    MAX(bucket_start) AS last_bucket,
+                    COUNT(DISTINCT DATE(bucket_start)) AS data_days
                 FROM span_circuit_aggregations
                 WHERE property_id = %s
                   AND energy_wh IS NOT NULL
@@ -109,22 +117,29 @@ def _get_historical_monthly(property_id: str) -> dict[int, float]:
     finally:
         conn.close()
 
-    result: dict[int, float] = {}
+    result: dict[int, dict] = {}
     for row in rows:
         month = int(row["month"])
         kwh = float(row["total_kwh"])
+        raw_kwh = kwh
+        data_days = int(row["data_days"])
         first = row["first_bucket"]
         last = row["last_bucket"]
+        is_partial = False
 
-        # If the month is partial, scale up to full month
         if first and last:
             days_span = max((last - first).total_seconds() / 86400.0, 1.0)
             days_in_month = calendar.monthrange(first.year, month)[1]
             if days_span < days_in_month * 0.8:
-                # Partial month — scale up
                 kwh = kwh * (days_in_month / days_span)
+                is_partial = True
 
-        result[month] = kwh
+        result[month] = {
+            "kwh": kwh,
+            "raw_kwh": raw_kwh,
+            "data_days": data_days,
+            "is_partial": is_partial,
+        }
 
     return result
 
@@ -141,40 +156,43 @@ def _get_settings() -> dict[str, str]:
 
 
 def _build_forecast(
-    historical: dict[int, float],
+    historical: dict[int, dict],
     temps: list[float],
     rate: float,
     solar_annual_kwh: float,
     solar_monthly_payment: float,
     net_metering: bool,
-) -> list[MonthlyForecast]:
-    """Build 12-month forecast using degree-day regression."""
+) -> tuple[list[MonthlyForecast], str, str | None]:
+    """Build 12-month forecast using degree-day regression.
+
+    Returns (forecasts, methodology_text, regression_formula).
+    """
 
     # Pair actual months with their degree days
     actual_months = []
-    for m, kwh in historical.items():
+    for m, info in historical.items():
         t = temps[m - 1]
-        actual_months.append((m, kwh, _hdd(t), _cdd(t), t))
+        actual_months.append((m, info["kwh"], _hdd(t), _cdd(t), t, info))
+
+    regression_formula = None
+    methodology = ""
 
     # Fit regression: kwh = a*HDD + b*CDD + c
     if len(actual_months) >= 3:
-        # Simple least-squares: kwh = a*HDD + b*CDD + c
         import numpy as np
 
         X = []
         y = []
-        for _, kwh, hdd, cdd, _ in actual_months:
+        for _, kwh, hdd, cdd, _, _ in actual_months:
             X.append([hdd, cdd, 1.0])
             y.append(kwh)
-        X = np.array(X)
-        y = np.array(y)
+        X_arr = np.array(X)
+        y_arr = np.array(y)
 
-        # Use least squares (may be underdetermined, use lstsq)
-        result = np.linalg.lstsq(X, y, rcond=None)
-        coeffs = result[0]  # [a, b, c]
-        a_hdd, b_cdd, c_base = coeffs[0], coeffs[1], coeffs[2]
+        result = np.linalg.lstsq(X_arr, y_arr, rcond=None)
+        coeffs = result[0]
+        a_hdd, b_cdd, c_base = float(coeffs[0]), float(coeffs[1]), float(coeffs[2])
 
-        # Ensure non-negative base and coefficients
         if c_base < 0:
             c_base = 0.0
         if a_hdd < 0:
@@ -182,42 +200,64 @@ def _build_forecast(
         if b_cdd < 0:
             b_cdd = 0.0
 
+        regression_formula = f"kWh = {a_hdd:.1f} × HDD + {b_cdd:.1f} × CDD + {c_base:.0f}"
+
         def predict(month: int) -> float:
             t = temps[month - 1]
             est = a_hdd * _hdd(t) + b_cdd * _cdd(t) + c_base
-            return max(est, c_base * 0.5)  # floor at half the base
-    else:
-        # Not enough data points — use simpler approach
-        # Calculate average daily kWh and scale by degree-day ratio
-        total_kwh = sum(kwh for _, kwh, _, _, _ in actual_months)
-        total_days_equiv = len(actual_months) * 30
-        daily_avg = total_kwh / max(total_days_equiv, 1)
+            return max(est, c_base * 0.5)
 
-        # Use actual average as a simple base
+        actual_month_names = [MONTH_NAMES[m - 1] for m, _, _, _, _, _ in actual_months]
+        methodology = (
+            f"Forecast uses {len(actual_months)} months of actual data "
+            f"({', '.join(actual_month_names)}) to fit a degree-day regression model. "
+            f"Formula: {regression_formula}. "
+            f"HDD = heating degree days (base 65°F), CDD = cooling degree days. "
+            f"Months without data are projected using this formula with average "
+            f"New England temperatures. Partial months are scaled proportionally."
+        )
+    else:
+        total_kwh = sum(info["kwh"] for _, info in historical.items())
         avg_kwh = total_kwh / max(len(actual_months), 1)
 
         def predict(month: int) -> float:
-            return avg_kwh  # simple fallback
+            return avg_kwh
+
+        methodology = (
+            f"Only {len(actual_months)} months of data available — using simple average "
+            f"({avg_kwh:.0f} kWh/month) for projected months. More data will improve accuracy."
+        )
 
     forecasts: list[MonthlyForecast] = []
     for m in range(1, 13):
-        is_actual = m in historical
-        usage_kwh = historical[m] if is_actual else predict(m)
+        hist_info = historical.get(m)
+        is_actual = hist_info is not None
+        hdd_val = _hdd(temps[m - 1])
+        cdd_val = _cdd(temps[m - 1])
+
+        if is_actual:
+            usage_kwh = hist_info["kwh"]
+            data_days = hist_info["data_days"]
+            if hist_info["is_partial"]:
+                method = "scaled_partial"
+            else:
+                method = "actual"
+        else:
+            usage_kwh = predict(m)
+            data_days = 0
+            method = "degree_day_regression" if regression_formula else "average_fallback"
+
         usage_kwh = max(usage_kwh, 0.0)
         avg_temp = temps[m - 1]
-
         cost_no_solar = usage_kwh * rate
 
-        # Solar production for this month
         solar_kwh = solar_annual_kwh * MONTHLY_SOLAR_FACTORS[m - 1] if solar_annual_kwh > 0 else 0.0
 
-        # Cost with solar
         if solar_annual_kwh > 0:
             if net_metering:
                 net_grid = max(0.0, usage_kwh - solar_kwh)
                 cost_w_solar = net_grid * rate + solar_monthly_payment
             else:
-                # Only offset up to usage during solar hours (~50% of day usage)
                 usable = min(solar_kwh, usage_kwh * 0.5)
                 net_grid = usage_kwh - usable
                 cost_w_solar = net_grid * rate + solar_monthly_payment
@@ -236,9 +276,13 @@ def _build_forecast(
             solar_production_kwh=round(solar_kwh, 1),
             cost_with_solar=round(cost_w_solar, 2),
             savings=round(savings, 2),
+            method=method,
+            data_days=data_days,
+            hdd=round(hdd_val, 1),
+            cdd=round(cdd_val, 1),
         ))
 
-    return forecasts
+    return forecasts, methodology, regression_formula
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +310,7 @@ def get_forecast() -> AnnualForecastResponse:
     has_solar_quote = solar_annual_kwh > 0 and solar_monthly_payment > 0
 
     # Step 4: build forecast
-    months = _build_forecast(
+    months, methodology, regression_formula = _build_forecast(
         historical, temps, rate,
         solar_annual_kwh, solar_monthly_payment, net_metering,
     )
@@ -284,4 +328,7 @@ def get_forecast() -> AnnualForecastResponse:
         annual_savings=round(annual_savings, 2),
         solar_monthly_payment=solar_monthly_payment,
         has_solar_quote=has_solar_quote,
+        methodology=methodology,
+        data_months=len(historical),
+        regression_formula=regression_formula,
     )
