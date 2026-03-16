@@ -313,7 +313,7 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                         const deviceKey = `${circuit.equipment_id}-${i}`
                         const displayName = renamedDevices[deviceKey] || d.name
                         return (
-                          <div key={i} className="pl-3 sm:pl-5 py-2 text-xs border-b border-gray-800/30 last:border-0">
+                          <div key={i} className={`pl-3 sm:pl-5 py-2 text-xs border-b border-gray-800/30 last:border-0 ${d.suppressed_on_other_circuit ? 'opacity-60' : ''}`}>
                             <div className="flex items-center gap-2 sm:gap-3">
                               {hasShapeData && <MiniSparkline curve={d.template_curve!} />}
                               <span
@@ -326,6 +326,12 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                                 }}
                               >
                                 {displayName.replace(/_/g, ' ')}
+                                {d.user_confirmed && (
+                                  <span className="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-green-900/40 text-green-400 border border-green-800/40" title="User confirmed">confirmed</span>
+                                )}
+                                {d.suppressed_on_other_circuit && (
+                                  <span className="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-orange-900/30 text-orange-400 border border-orange-800/40" title="This device type was suppressed on another circuit">suppressed elsewhere</span>
+                                )}
                               </span>
                               <span className="text-gray-500 font-mono">~{formatPower(d.power_w)}</span>
                             </div>

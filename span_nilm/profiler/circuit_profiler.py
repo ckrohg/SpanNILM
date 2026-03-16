@@ -141,6 +141,13 @@ class CircuitProfiler:
                     for cid, score in corr_map[p.equipment_id][:5]
                 ]
 
+        # Apply user labels: override AI names with confirmed labels,
+        # adjust confidence, handle suppressed devices across circuits
+        self._apply_user_labels(profiles)
+
+        # Cross-circuit device template matching
+        self._apply_cross_circuit_matches(profiles)
+
         logger.info("Profiled %d circuits, found %d total power states",
                      len(profiles), sum(len(p.states) for p in profiles))
         return profiles
@@ -569,6 +576,152 @@ class CircuitProfiler:
         for state in states:
             state.device_name = f"{loc_prefix}sub-panel load ({self._format_power_label(state.center_w)})"
             state.confidence = 0.3
+
+    def _apply_user_labels(self, profiles: list[CircuitProfile]):
+        """Apply user-confirmed labels to shape_devices, adjusting names and confidence.
+
+        - Loads all device_labels (source='user' or 'ai_confirmed')
+        - Overrides AI-generated names with user labels
+        - Adjusts confidence: +0.1 for user-confirmed, +0.05 for AI-accepted
+        - Tracks suppressed device names across circuits for confidence penalty
+        """
+        # Load device labels from DB
+        labels: dict[str, dict] = {}  # "equip_id-cluster_id" -> {name, source}
+        suppressed_names: set[str] = set()  # AI names that were suppressed anywhere
+        try:
+            conn = psycopg2.connect(self.db_url)
+            try:
+                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                    cur.execute(
+                        "SELECT equipment_id, cluster_id, name, source FROM device_labels"
+                    )
+                    for r in cur.fetchall():
+                        key = f"{r['equipment_id']}-{r['cluster_id']}"
+                        labels[key] = {"name": r["name"], "source": r["source"]}
+
+                        # Track suppressed/rejected names by loading the original AI name
+                        if "[SUPPRESSED]" in r["name"] or r["name"] == "Not a real device":
+                            # Look up the original AI-generated name for this device
+                            cur2 = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                            cur2.execute(
+                                "SELECT shape_devices FROM circuit_profiles WHERE equipment_id = %s",
+                                (r["equipment_id"],),
+                            )
+                            prow = cur2.fetchone()
+                            cur2.close()
+                            if prow and prow.get("shape_devices"):
+                                import json
+                                sd_list = prow["shape_devices"]
+                                if isinstance(sd_list, str):
+                                    sd_list = json.loads(sd_list)
+                                for sd in sd_list:
+                                    if sd.get("cluster_id") == r["cluster_id"]:
+                                        suppressed_names.add(sd.get("name", ""))
+                                        break
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.debug("Could not load device_labels: %s", e)
+            return
+
+        if not labels and not suppressed_names:
+            return
+
+        logger.info(
+            "Applying %d user labels, %d suppressed names",
+            len(labels), len(suppressed_names),
+        )
+
+        for profile in profiles:
+            if not profile.shape_devices:
+                continue
+
+            for device in profile.shape_devices:
+                key = f"{profile.equipment_id}-{device.cluster_id}"
+                label = labels.get(key)
+
+                if label:
+                    # Skip suppressed/rejected — leave as-is for dashboard filtering
+                    if "[SUPPRESSED]" in label["name"] or label["name"] == "Not a real device":
+                        continue
+
+                    # Override the AI name with user label
+                    if label["name"] != device.name:
+                        logger.debug(
+                            "Overriding device name: %s -> %s (source=%s)",
+                            device.name, label["name"], label["source"],
+                        )
+                        device.name = label["name"]
+
+                    # Confidence boost for confirmed labels
+                    if label["source"] == "user":
+                        device.confidence = min(1.0, device.confidence + 0.1)
+                    elif label["source"] == "ai_confirmed":
+                        device.confidence = min(1.0, device.confidence + 0.05)
+                else:
+                    # No label yet — check if this AI name was suppressed on another circuit
+                    if device.name in suppressed_names:
+                        device.confidence = max(0.0, device.confidence - 0.2)
+                        logger.debug(
+                            "Penalizing confidence for '%s' on %s (suppressed elsewhere)",
+                            device.name, profile.circuit_name,
+                        )
+
+    def _apply_cross_circuit_matches(self, profiles: list[CircuitProfile]):
+        """Find devices with similar shapes across circuits and store matches.
+
+        Compares template curves across all circuits; if cosine similarity > 0.9
+        and power within 20%, records the match in the profile's correlations
+        as device-level matches.
+        """
+        # Build input for cross-circuit matching
+        all_device_profiles: list[tuple[str, str, list]] = []
+        for p in profiles:
+            if p.shape_devices:
+                all_device_profiles.append(
+                    (p.equipment_id, p.circuit_name, p.shape_devices)
+                )
+
+        if len(all_device_profiles) < 2:
+            return
+
+        matches = ShapeDetector.find_cross_circuit_matches(all_device_profiles)
+        if not matches:
+            return
+
+        logger.info("Found %d cross-circuit device matches", len(matches))
+
+        # Build a lookup: equipment_id -> list of device-level match dicts
+        device_matches_map: dict[str, list[dict]] = {}
+        for m in matches:
+            eid_a, cid_a, name_a = m["device_a"]
+            eid_b, cid_b, name_b = m["device_b"]
+            cos_sim = m["cosine_similarity"]
+            pwr_ratio = m["power_ratio"]
+
+            # Add match info to both sides
+            for eid, other_eid, other_cid, other_name in [
+                (eid_a, eid_b, cid_b, name_b),
+                (eid_b, eid_a, cid_a, name_a),
+            ]:
+                device_matches_map.setdefault(eid, []).append({
+                    "equipment_id": other_eid,
+                    "cluster_id": other_cid,
+                    "name": other_name,
+                    "cosine_similarity": cos_sim,
+                    "power_ratio": pwr_ratio,
+                    "match_type": "device_shape",
+                })
+
+        # Store device matches in each profile's correlations (extend existing)
+        for p in profiles:
+            if p.equipment_id in device_matches_map:
+                # Convert device matches to correlation tuples
+                for dm in device_matches_map[p.equipment_id]:
+                    match_label = f"{dm['name']} (shape match {dm['cosine_similarity']:.0%})"
+                    p.correlations.append(
+                        (dm["equipment_id"], match_label, dm["cosine_similarity"])
+                    )
 
     def save_profiles(self, profiles: list[CircuitProfile]) -> int:
         """Save profiles to SpanNILM database. Returns number saved."""

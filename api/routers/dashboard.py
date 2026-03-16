@@ -357,6 +357,7 @@ def get_dashboard(
     # 4. Load circuit profiles for detected devices + temporal + correlations
     # Also load device labels to get user-confirmed names and suppressed devices
     device_labels: dict[str, dict] = {}  # key: "equip_id-cluster_id" -> {name, source}
+    suppressed_ai_names: set[str] = set()  # AI-generated names that were suppressed on any circuit
     try:
         conn = _get_spannilm_db()
         try:
@@ -365,6 +366,25 @@ def get_dashboard(
                 for r in cur.fetchall():
                     key = f"{r['equipment_id']}-{r['cluster_id']}"
                     device_labels[key] = {"name": r["name"], "source": r["source"]}
+
+                    # Track AI-generated names that were suppressed
+                    if "[SUPPRESSED]" in r["name"] or r["name"] == "Not a real device":
+                        # Look up the original AI name from circuit_profiles
+                        cur.execute(
+                            "SELECT shape_devices FROM circuit_profiles WHERE equipment_id = %s",
+                            (r["equipment_id"],),
+                        )
+                        prow = cur.fetchone()
+                        if prow and prow.get("shape_devices"):
+                            sd_list = prow["shape_devices"]
+                            if isinstance(sd_list, str):
+                                sd_list = json.loads(sd_list)
+                            for sd in sd_list:
+                                if sd.get("cluster_id") == r["cluster_id"]:
+                                    orig_name = sd.get("name", "")
+                                    if orig_name:
+                                        suppressed_ai_names.add(orig_name)
+                                    break
         finally:
             conn.close()
     except Exception:
@@ -398,6 +418,14 @@ def get_dashboard(
 
                         # Use user-confirmed name if available
                         dev_name = label["name"] if label else sd["name"]
+                        is_user_confirmed = label is not None and label["source"] in ("user", "ai_confirmed")
+
+                        # Check if this AI-generated name was suppressed on another circuit
+                        ai_name = sd["name"]
+                        is_suppressed_elsewhere = (
+                            ai_name in suppressed_ai_names
+                            and not is_user_confirmed
+                        )
 
                         spd = sd.get("sessions_per_day", 0)
                         avg_dur = sd.get("avg_duration_min", 0)
@@ -413,6 +441,8 @@ def get_dashboard(
                             is_cycling=sd.get("is_cycling", False),
                             num_phases=sd.get("num_phases", 1),
                             energy_per_session_wh=sd.get("energy_per_session_wh", 0),
+                            suppressed_on_other_circuit=is_suppressed_elsewhere,
+                            user_confirmed=is_user_confirmed,
                         ))
                 else:
                     for s in (row.get("states") or []):

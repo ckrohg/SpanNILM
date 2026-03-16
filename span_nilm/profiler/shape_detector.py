@@ -292,15 +292,32 @@ class ShapeDetector:
         return np.array(features_list), valid_sessions
 
     def _cluster_sessions(self, features: np.ndarray) -> np.ndarray:
-        """Cluster sessions using HDBSCAN on feature vectors."""
+        """Cluster sessions using HDBSCAN on feature vectors.
+
+        HDBSCAN parameters scale with data volume:
+        - <20 sessions: min_cluster_size=3, min_samples=2 (loose — few data points)
+        - 20-50: min_cluster_size=4, min_samples=2
+        - 50-200: min_cluster_size=5, min_samples=3 (tighter clusters)
+        - >200: min_cluster_size=8, min_samples=4 (very tight)
+        """
         # Standardize features
         scaler = StandardScaler()
         scaled = scaler.fit_transform(features)
 
+        n = len(features)
+        if n < 20:
+            min_cluster_size, min_samples = 3, 2
+        elif n < 50:
+            min_cluster_size, min_samples = 4, 2
+        elif n <= 200:
+            min_cluster_size, min_samples = 5, 3
+        else:
+            min_cluster_size, min_samples = 8, 4
+
         # HDBSCAN: discovers clusters automatically, handles noise
         clusterer = HDBSCAN(
-            min_cluster_size=max(3, len(features) // 10),
-            min_samples=2,
+            min_cluster_size=min_cluster_size,
+            min_samples=min_samples,
             metric="euclidean",
         )
         labels = clusterer.fit_predict(scaled)
@@ -308,8 +325,9 @@ class ShapeDetector:
         n_clusters = len(set(labels) - {-1})
         n_noise = (labels == -1).sum()
         logger.info(
-            "Clustered %d sessions into %d device types (%d noise)",
-            len(features), n_clusters, n_noise,
+            "Clustered %d sessions into %d device types (%d noise) "
+            "[min_cluster_size=%d, min_samples=%d]",
+            len(features), n_clusters, n_noise, min_cluster_size, min_samples,
         )
 
         return labels
@@ -579,6 +597,77 @@ class ShapeDetector:
         elif avg_power < 1000:
             return f"{location}Short-cycle load ({avg_power:.0f}W)"
         return f"{location}Short heavy load ({avg_power:.0f}W)"
+
+    @staticmethod
+    def find_cross_circuit_matches(
+        all_profiles: list[tuple[str, str, list["DeviceTemplate"]]],
+    ) -> list[dict]:
+        """Compare device templates across circuits to find similar devices.
+
+        Args:
+            all_profiles: list of (equipment_id, circuit_name, devices) tuples
+
+        Returns:
+            List of match dicts: {
+                "device_a": (equip_id, cluster_id, name),
+                "device_b": (equip_id, cluster_id, name),
+                "cosine_similarity": float,
+                "power_ratio": float,
+            }
+        """
+        from numpy.linalg import norm
+
+        matches = []
+        # Build flat list of (equip_id, circuit_name, device) tuples
+        flat: list[tuple[str, str, "DeviceTemplate"]] = []
+        for equip_id, cname, devs in all_profiles:
+            for d in devs:
+                flat.append((equip_id, cname, d))
+
+        for i in range(len(flat)):
+            eid_a, _, dev_a = flat[i]
+            curve_a = np.array(dev_a.template_curve)
+            norm_a = norm(curve_a)
+            if norm_a < 1e-9:
+                continue
+
+            for j in range(i + 1, len(flat)):
+                eid_b, _, dev_b = flat[j]
+                # Only compare across different circuits
+                if eid_a == eid_b:
+                    continue
+
+                curve_b = np.array(dev_b.template_curve)
+                norm_b = norm(curve_b)
+                if norm_b < 1e-9:
+                    continue
+
+                cosine = float(np.dot(curve_a, curve_b) / (norm_a * norm_b))
+                if cosine < 0.9:
+                    continue
+
+                # Check power similarity (within 20%)
+                max_p = max(dev_a.avg_power_w, dev_b.avg_power_w, 1)
+                min_p = min(dev_a.avg_power_w, dev_b.avg_power_w)
+                power_ratio = min_p / max_p
+                if power_ratio < 0.8:
+                    continue
+
+                matches.append({
+                    "device_a": (eid_a, dev_a.cluster_id, dev_a.name),
+                    "device_b": (eid_b, dev_b.cluster_id, dev_b.name),
+                    "cosine_similarity": round(cosine, 3),
+                    "power_ratio": round(power_ratio, 3),
+                })
+                logger.info(
+                    "Cross-circuit match: %s (cluster %d) <-> %s (cluster %d) "
+                    "cosine=%.3f power_ratio=%.3f",
+                    dev_a.name, dev_a.cluster_id,
+                    dev_b.name, dev_b.cluster_id,
+                    cosine, power_ratio,
+                )
+
+        return matches
 
     def _single_device_fallback(
         self, sessions: list[Session], circuit_name: str,

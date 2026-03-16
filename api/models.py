@@ -96,6 +96,8 @@ class DetectedDevice(BaseModel):
     is_cycling: bool = False
     num_phases: int = 1
     energy_per_session_wh: float = 0
+    suppressed_on_other_circuit: bool = False  # Same AI name was suppressed elsewhere
+    user_confirmed: bool = False  # User confirmed or named this device
 
 
 class CorrelationInfo(BaseModel):

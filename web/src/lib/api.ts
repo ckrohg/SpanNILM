@@ -123,6 +123,8 @@ export interface DetectedDevice {
   is_cycling: boolean
   num_phases: number
   energy_per_session_wh: number
+  suppressed_on_other_circuit: boolean
+  user_confirmed: boolean
 }
 
 export interface TemporalInfo {
@@ -373,5 +375,35 @@ export async function fetchDeviceDetail(
     `${API_URL}/api/devices/${equipmentId}/${clusterId}/detail?days=${days}`
   )
   if (!res.ok) throw new Error(`Device detail failed: ${res.status}`)
+  return res.json()
+}
+
+// Forecast types and API
+
+export interface MonthlyForecast {
+  month: number
+  month_name: string
+  usage_kwh: number
+  is_actual: boolean
+  avg_temp_f: number
+  cost_without_solar: number
+  solar_production_kwh: number
+  cost_with_solar: number
+  savings: number
+}
+
+export interface AnnualForecastData {
+  months: MonthlyForecast[]
+  annual_usage_kwh: number
+  annual_cost_without_solar: number
+  annual_cost_with_solar: number
+  annual_savings: number
+  solar_monthly_payment: number
+  has_solar_quote: boolean
+}
+
+export async function fetchForecast(): Promise<AnnualForecastData> {
+  const res = await fetch(`${API_URL}/api/forecast`)
+  if (!res.ok) throw new Error(`Forecast failed: ${res.status}`)
   return res.json()
 }

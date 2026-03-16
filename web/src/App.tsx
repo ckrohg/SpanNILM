@@ -10,6 +10,7 @@ import CostBreakdown from './components/CostBreakdown'
 import WeeklyDigest from './components/WeeklyDigest'
 import EfficiencyScore from './components/EfficiencyScore'
 import SolarAnalysis from './components/SolarAnalysis'
+import AnnualForecast from './components/AnnualForecast'
 import Circuits from './pages/Circuits'
 import CircuitDetail from './pages/CircuitDetail'
 import DeviceDetail from './pages/DeviceDetail'
@@ -306,6 +307,14 @@ export default function App() {
                     Weekly Digest
                   </h2>
                   <WeeklyDigest data={dashboard} />
+                </section>
+
+                {/* Annual Forecast */}
+                <section>
+                  <h2 className="text-sm font-medium text-gray-400 mb-2">
+                    Annual Energy Forecast
+                  </h2>
+                  <AnnualForecast />
                 </section>
 
                 {/* Solar Readiness */}
