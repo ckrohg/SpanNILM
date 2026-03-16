@@ -117,6 +117,65 @@ export default function EnergySummary({
           </div>
         </div>
       )}
+
+      {/* Top Always-On loads */}
+      {(() => {
+        const topAlwaysOn = [...circuits]
+          .filter((c) => c.always_on_w > 1)
+          .sort((a, b) => b.always_on_w - a.always_on_w)
+          .slice(0, 5)
+        const maxAO = topAlwaysOn[0]?.always_on_w || 1
+
+        // Estimate always-on cost for the selected period
+        const periodHours = isMonthView
+          ? (dateRange === 'year' || dateRange === '365d' ? 8760 : 720)
+          : (dateRange === '7d' ? 168 : 24)
+        const rate = displayCost / Math.max(displayEnergy, 1)
+
+        if (topAlwaysOn.length === 0) return null
+        const totalAOW = topAlwaysOn.reduce((s, c) => s + c.always_on_w, 0)
+        const totalAOCost = (totalAOW * periodHours / 1000) * rate
+
+        return (
+          <div className="bg-amber-900/10 border border-amber-800/30 rounded-xl p-3 sm:p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[10px] sm:text-xs font-medium text-amber-400/80 uppercase tracking-wide">
+                Top Always-On Loads
+              </h3>
+              <span className="text-[10px] text-amber-400/60">
+                ~{formatCost(totalAOCost)} during {displayLabel.toLowerCase()}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {topAlwaysOn.map((circuit) => {
+                const pct = (circuit.always_on_w / maxAO) * 100
+                const aoCostPeriod = (circuit.always_on_w * periodHours / 1000) * rate
+                return (
+                  <div key={circuit.equipment_id} className="flex items-center gap-2 sm:gap-3">
+                    <span className="text-xs sm:text-sm text-gray-300 w-24 sm:w-36 min-w-[6rem] sm:min-w-[9rem] truncate">
+                      {circuit.name}
+                    </span>
+                    <div className="flex-1 h-2 sm:h-3 bg-gray-800/60 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-amber-500/50"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] sm:text-xs font-mono text-amber-300 w-14 sm:w-16 text-right">
+                      {circuit.always_on_w >= 1000
+                        ? `${(circuit.always_on_w / 1000).toFixed(1)} kW`
+                        : `${Math.round(circuit.always_on_w)} W`}
+                    </span>
+                    <span className="text-[10px] sm:text-xs font-mono text-amber-400/60 w-10 sm:w-14 text-right">
+                      {formatCost(aoCostPeriod)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
