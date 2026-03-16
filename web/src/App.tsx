@@ -228,6 +228,8 @@ export default function App() {
                     alwaysOnW={dashboard.always_on_w}
                     totalPowerW={dashboard.total_power_w}
                     totalEnergyTodayKwh={dashboard.total_energy_today_kwh}
+                    circuits={dashboard.circuits}
+                    electricityRate={dashboard.electricity_rate}
                   />
                   <EfficiencyScore data={dashboard} />
                 </div>
