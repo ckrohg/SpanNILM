@@ -15,11 +15,12 @@ import AnnualForecast from './components/AnnualForecast'
 import Circuits from './pages/Circuits'
 import CircuitDetail from './pages/CircuitDetail'
 import DeviceDetail from './pages/DeviceDetail'
+import Categories from './pages/Categories'
 import Settings from './pages/Settings'
 import DateRangePicker from './components/DateRangePicker'
 import type { DateRange } from './lib/api'
 
-type Page = 'dashboard' | 'circuits' | 'settings' | 'detail' | 'device_detail'
+type Page = 'dashboard' | 'circuits' | 'categories' | 'settings' | 'detail' | 'device_detail'
 
 const PERIOD_LABELS: Record<DateRange, string> = {
   today: 'Today',
@@ -135,6 +136,9 @@ export default function App() {
               <NavLink active={page === 'circuits'} onClick={() => setPage('circuits')}>
                 Circuits
               </NavLink>
+              <NavLink active={page === 'categories'} onClick={() => setPage('categories')}>
+                Categories
+              </NavLink>
               <NavLink active={page === 'settings'} onClick={() => setPage('settings')}>
                 Settings
               </NavLink>
@@ -163,6 +167,7 @@ export default function App() {
 
       <main className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
         {page === 'circuits' && <Circuits />}
+        {page === 'categories' && dashboard && <Categories circuits={dashboard.circuits} />}
         {page === 'settings' && <Settings />}
         {page === 'detail' && selectedCircuit && (
           <CircuitDetail

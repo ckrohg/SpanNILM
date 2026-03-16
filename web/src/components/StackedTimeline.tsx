@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import {
   AreaChart,
   Area,
@@ -10,14 +11,20 @@ import {
 } from 'recharts'
 import type { TimelineBucket } from '../lib/api'
 
-// Distinct color palette for circuits
+// Rich 12-color palette with good contrast on dark backgrounds
 const COLORS = [
   '#3b82f6', // blue
   '#22c55e', // green
-  '#f59e0b', // orange
-  '#8b5cf6', // purple
+  '#f97316', // orange
+  '#a855f7', // purple
   '#06b6d4', // cyan
   '#ec4899', // pink
+  '#eab308', // yellow
+  '#14b8a6', // teal
+  '#f43f5e', // rose
+  '#8b5cf6', // violet
+  '#84cc16', // lime
+  '#e879f9', // fuchsia
 ]
 
 function formatTime(ts: string): string {
@@ -35,6 +42,58 @@ interface Props {
   alwaysOnW: number
 }
 
+interface TooltipPayloadItem {
+  name: string
+  value: number
+  color: string
+  dataKey: string
+}
+
+function CustomTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: TooltipPayloadItem[]
+  label?: string
+}) {
+  if (!active || !payload || !payload.length) return null
+
+  // Sort by value descending, filter out zero
+  const items = payload
+    .filter((p) => p.value > 0)
+    .sort((a, b) => b.value - a.value)
+
+  const total = items.reduce((sum, p) => sum + p.value, 0)
+
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl text-xs max-w-[260px]">
+      <div className="text-gray-400 mb-1.5 font-medium">{label}</div>
+      <div className="space-y-0.5">
+        {items.map((item) => (
+          <div key={item.dataKey} className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div
+                className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                style={{ backgroundColor: item.color }}
+              />
+              <span className="text-gray-300 truncate">{item.name}</span>
+            </div>
+            <span className="text-white font-mono tabular-nums flex-shrink-0">
+              {formatPower(item.value)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-gray-700 mt-1.5 pt-1.5 flex justify-between">
+        <span className="text-gray-400">Total</span>
+        <span className="text-white font-mono font-bold">{formatPower(total)}</span>
+      </div>
+    </div>
+  )
+}
+
 export default function StackedTimeline({ timeline, alwaysOnW }: Props) {
   if (!timeline.length) {
     return (
@@ -44,61 +103,66 @@ export default function StackedTimeline({ timeline, alwaysOnW }: Props) {
     )
   }
 
-  // Find top 6 circuits by total energy across all buckets
-  const circuitTotals: Record<string, number> = {}
-  for (const bucket of timeline) {
-    for (const [name, power] of Object.entries(bucket.circuits)) {
-      circuitTotals[name] = (circuitTotals[name] || 0) + power
-    }
-  }
-
-  const sortedCircuits = Object.entries(circuitTotals)
-    .sort((a, b) => b[1] - a[1])
-
-  const topCircuits = sortedCircuits.slice(0, 6).map(([name]) => name)
-  const otherCircuits = sortedCircuits.slice(6).map(([name]) => name)
-  const hasOther = otherCircuits.length > 0
-
-  // Build flat data for Recharts
-  const chartData = timeline.map((bucket) => {
-    const point: Record<string, number | string> = {
-      time: formatTime(bucket.timestamp),
-      timestamp: bucket.timestamp,
-    }
-
-    for (const name of topCircuits) {
-      point[name] = Math.round(bucket.circuits[name] || 0)
-    }
-
-    if (hasOther) {
-      let otherSum = 0
-      for (const name of otherCircuits) {
-        otherSum += bucket.circuits[name] || 0
+  // Find all circuits and sort by total energy (largest first = bottom of stack)
+  const { chartData, sortedKeys, colorMap } = useMemo(() => {
+    const circuitTotals: Record<string, number> = {}
+    for (const bucket of timeline) {
+      for (const [name, power] of Object.entries(bucket.circuits)) {
+        circuitTotals[name] = (circuitTotals[name] || 0) + power
       }
-      point['Other'] = Math.round(otherSum)
     }
 
-    return point
-  })
+    const sorted = Object.entries(circuitTotals)
+      .sort((a, b) => b[1] - a[1])
 
-  const allKeys = [...topCircuits]
-  if (hasOther) allKeys.push('Other')
+    // Top 10 individually, rest grouped as "Other"
+    const topCircuits = sorted.slice(0, 10).map(([name]) => name)
+    const otherCircuits = sorted.slice(10).map(([name]) => name)
+    const hasOther = otherCircuits.length > 0
 
-  const colorMap: Record<string, string> = {}
-  allKeys.forEach((key, i) => {
-    colorMap[key] = key === 'Other' ? '#4b5563' : COLORS[i % COLORS.length]
-  })
+    // Build keys: largest first (they render at bottom of stack)
+    const keys = [...topCircuits]
+    if (hasOther) keys.push('Other')
+
+    const colors: Record<string, string> = {}
+    keys.forEach((key, i) => {
+      colors[key] = key === 'Other' ? '#6b7280' : COLORS[i % COLORS.length]
+    })
+
+    const data = timeline.map((bucket) => {
+      const point: Record<string, number | string> = {
+        time: formatTime(bucket.timestamp),
+        timestamp: bucket.timestamp,
+      }
+
+      for (const name of topCircuits) {
+        point[name] = Math.max(0, Math.round(bucket.circuits[name] || 0))
+      }
+
+      if (hasOther) {
+        let otherSum = 0
+        for (const name of otherCircuits) {
+          otherSum += bucket.circuits[name] || 0
+        }
+        point['Other'] = Math.max(0, Math.round(otherSum))
+      }
+
+      return point
+    })
+
+    return { chartData: data, sortedKeys: keys, colorMap: colors }
+  }, [timeline])
 
   return (
     <div className="rounded-xl bg-gray-900/50 border border-gray-800 p-2 sm:p-4">
-      <div className="h-48 sm:h-64">
+      <div className="h-56 sm:h-72">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData}>
+          <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
             <defs>
-              {allKeys.map((key) => (
-                <linearGradient key={key} id={`grad-${key}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={colorMap[key]} stopOpacity={0.6} />
-                  <stop offset="95%" stopColor={colorMap[key]} stopOpacity={0.1} />
+              {sortedKeys.map((key) => (
+                <linearGradient key={key} id={`fill-${key.replace(/[^a-zA-Z0-9]/g, '_')}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={colorMap[key]} stopOpacity={0.7} />
+                  <stop offset="100%" stopColor={colorMap[key]} stopOpacity={0.5} />
                 </linearGradient>
               ))}
             </defs>
@@ -107,6 +171,7 @@ export default function StackedTimeline({ timeline, alwaysOnW }: Props) {
               stroke="#4b5563"
               fontSize={10}
               tickLine={false}
+              axisLine={{ stroke: '#374151' }}
               interval="preserveStartEnd"
               minTickGap={60}
             />
@@ -114,26 +179,20 @@ export default function StackedTimeline({ timeline, alwaysOnW }: Props) {
               stroke="#4b5563"
               fontSize={10}
               tickLine={false}
+              axisLine={false}
               tickFormatter={(v) => formatPower(v)}
-              width={50}
+              width={52}
             />
             <Tooltip
-              contentStyle={{
-                backgroundColor: '#1f2937',
-                border: '1px solid #374151',
-                borderRadius: '0.5rem',
-                fontSize: '11px',
-              }}
-              formatter={(value: number, name: string) => [formatPower(value), name]}
-              labelFormatter={(label) => `Time: ${label}`}
-              itemSorter={(item) => -(item.value as number)}
+              content={<CustomTooltip />}
+              cursor={{ stroke: '#6b7280', strokeWidth: 1, strokeDasharray: '4 4' }}
             />
             <Legend
-              wrapperStyle={{ fontSize: '10px', paddingTop: '4px' }}
+              wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }}
               iconType="square"
               iconSize={8}
-              formatter={(value) => (
-                <span className="text-gray-400">{value}</span>
+              formatter={(value: string) => (
+                <span className="text-gray-400 text-[10px]">{value}</span>
               )}
             />
             {alwaysOnW > 0 && (
@@ -150,15 +209,17 @@ export default function StackedTimeline({ timeline, alwaysOnW }: Props) {
                 }}
               />
             )}
-            {allKeys.map((key) => (
+            {/* Render largest consumers first (bottom of stack) */}
+            {sortedKeys.map((key) => (
               <Area
                 key={key}
                 type="monotone"
                 dataKey={key}
                 stackId="1"
                 stroke={colorMap[key]}
-                fill={`url(#grad-${key})`}
-                strokeWidth={1}
+                strokeWidth={0.5}
+                fill={`url(#fill-${key.replace(/[^a-zA-Z0-9]/g, '_')})`}
+                fillOpacity={1}
               />
             ))}
           </AreaChart>
