@@ -170,6 +170,24 @@ function NamingModal({ equipmentId, clusterId, currentName, onClose, onNameSet }
             </button>
           </div>
         </div>
+
+        {/* Quick actions */}
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={() => saveName('Unidentified device')}
+            disabled={saving}
+            className="flex-1 px-3 py-2 text-xs rounded-lg bg-gray-800/60 border border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-colors"
+          >
+            I don't know what this is
+          </button>
+          <button
+            onClick={() => saveName('Not a real device')}
+            disabled={saving}
+            className="flex-1 px-3 py-2 text-xs rounded-lg bg-gray-800/60 border border-gray-700/50 text-gray-400 hover:text-red-400 hover:border-red-800 transition-colors"
+          >
+            This isn't a device
+          </button>
+        </div>
       </div>
     </div>
   )
