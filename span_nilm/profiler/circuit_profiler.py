@@ -141,6 +141,10 @@ class CircuitProfiler:
                     for cid, score in corr_map[p.equipment_id][:5]
                 ]
 
+        # Learn from dedicated circuits: extract reference templates and
+        # compare against shared circuit devices for type suggestions
+        self._learn_from_dedicated(profiles, agg_df)
+
         # Apply user labels: override AI names with confirmed labels,
         # adjust confidence, handle suppressed devices across circuits
         self._apply_user_labels(profiles)
@@ -576,6 +580,129 @@ class CircuitProfiler:
         for state in states:
             state.device_name = f"{loc_prefix}sub-panel load ({self._format_power_label(state.center_w)})"
             state.confidence = 0.3
+
+    def _learn_from_dedicated(
+        self, profiles: list[CircuitProfile], agg_df: pd.DataFrame
+    ):
+        """Use dedicated circuit patterns as training data for shared circuit detection.
+
+        For each dedicated circuit with a known device type:
+        1. Extract sessions from the aggregated power data
+        2. Normalize each session's power curve to a 32-point template
+        3. Compute the median template as the reference for that device type
+
+        Then compare every shared circuit's detected device templates against
+        these references using cosine similarity. If similarity > 0.85,
+        suggest the dedicated circuit's device type as the name and boost
+        confidence.
+        """
+        from numpy.linalg import norm
+
+        shape_det = ShapeDetector()
+
+        # Step 1: Build reference templates from dedicated circuits
+        reference_templates: list[dict] = []
+        # dict keys: device_type, template (np.ndarray), avg_power_w
+
+        for profile in profiles:
+            if not profile.is_dedicated or not profile.dedicated_device_type:
+                continue
+
+            # Get aggregated data for this dedicated circuit
+            circuit_data = agg_df[agg_df["circuit_id"] == profile.equipment_id]
+            if circuit_data.empty:
+                continue
+
+            circuit_data = circuit_data.sort_values("timestamp").reset_index(drop=True)
+
+            # Extract sessions
+            sessions = shape_det._extract_sessions(circuit_data)
+            if len(sessions) < 3:
+                logger.debug(
+                    "Too few sessions (%d) on dedicated circuit %s for reference template",
+                    len(sessions), profile.circuit_name,
+                )
+                continue
+
+            # Normalize each session's power curve
+            curves = []
+            powers = []
+            for s in sessions:
+                c = shape_det._normalize_curve(s.power_curve)
+                if c is not None:
+                    curves.append(c)
+                    powers.append(float(np.mean(s.power_curve)))
+
+            if len(curves) < 3:
+                continue
+
+            # Median template = robust reference shape
+            template = np.median(np.array(curves), axis=0)
+            avg_power = float(np.median(powers))
+
+            reference_templates.append({
+                "device_type": profile.dedicated_device_type,
+                "circuit_name": profile.circuit_name,
+                "template": template,
+                "avg_power_w": avg_power,
+                "session_count": len(curves),
+            })
+            logger.info(
+                "Reference template for '%s' from %s: %d sessions, %.0fW avg",
+                profile.dedicated_device_type, profile.circuit_name,
+                len(curves), avg_power,
+            )
+
+        if not reference_templates:
+            logger.info("No reference templates extracted from dedicated circuits")
+            return
+
+        logger.info(
+            "Extracted %d reference templates from dedicated circuits",
+            len(reference_templates),
+        )
+
+        # Step 2: Compare shared circuit devices against references
+        matches_found = 0
+        for profile in profiles:
+            if profile.is_dedicated or not profile.shape_devices:
+                continue
+
+            for device in profile.shape_devices:
+                dev_curve = np.array(device.template_curve)
+                dev_norm = norm(dev_curve)
+                if dev_norm < 1e-9:
+                    continue
+
+                best_sim = 0.0
+                best_ref = None
+
+                for ref in reference_templates:
+                    ref_curve = ref["template"]
+                    ref_norm = norm(ref_curve)
+                    if ref_norm < 1e-9:
+                        continue
+
+                    cosine = float(np.dot(dev_curve, ref_curve) / (dev_norm * ref_norm))
+                    if cosine > best_sim:
+                        best_sim = cosine
+                        best_ref = ref
+
+                if best_ref is not None and best_sim > 0.85:
+                    old_name = device.name
+                    device.name = f"{best_ref['device_type']} (matched)"
+                    device.confidence = min(1.0, device.confidence + 0.15)
+                    matches_found += 1
+                    logger.info(
+                        "Dedicated match on %s: '%s' -> '%s' "
+                        "(cosine=%.3f vs %s)",
+                        profile.circuit_name, old_name, device.name,
+                        best_sim, best_ref["circuit_name"],
+                    )
+
+        logger.info(
+            "Dedicated circuit learning: %d device matches found", matches_found
+        )
 
     def _apply_user_labels(self, profiles: list[CircuitProfile]):
         """Apply user-confirmed labels to shape_devices, adjusting names and confidence.

@@ -96,20 +96,20 @@ export default function LearnedDevices({ circuits }: Props) {
       return (
         <div key={key} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-green-900/10 border border-green-800/20">
           <span className="text-green-400 text-xs">✓ Confirmed</span>
-          <span className="text-sm text-gray-300">{item.device.name}</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{item.device.name}</span>
           <span className="text-xs text-gray-600">on {item.circuit.name}</span>
         </div>
       )
     }
 
     return (
-      <div key={key} className="rounded-lg bg-gray-900/40 border border-gray-800/50 overflow-hidden">
+      <div key={key} className="rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800/50 overflow-hidden">
         <div className="flex items-center gap-3 px-3 py-2.5">
           {item.device.template_curve && item.device.template_curve.length > 0 && (
             <MiniSparkline curve={item.device.template_curve} />
           )}
           <div className="flex-1 min-w-0">
-            <div className="text-sm text-gray-200 font-medium">{item.device.name}</div>
+            <div className="text-sm text-gray-800 dark:text-gray-200 font-medium">{item.device.name}</div>
             <div className="text-[10px] text-gray-500">
               {item.circuit.name} · ~{formatPower(item.device.power_w)} · {item.device.session_count} sessions · {Math.round(item.device.confidence * 100)}% confidence
             </div>
@@ -138,7 +138,7 @@ export default function LearnedDevices({ circuits }: Props) {
 
         {/* Rename / suggestions panel */}
         {isConfirmingThis && (
-          <div className="border-t border-gray-800/50 px-3 py-2.5 bg-gray-950/50 space-y-2">
+          <div className="border-t border-gray-200 dark:border-gray-800/50 px-3 py-2.5 bg-gray-50 dark:bg-gray-950/50 space-y-2">
             {!deviceSuggestions && !isLoadingSugs && (
               <button
                 onClick={() => handleGetSuggestions(item)}
@@ -156,9 +156,9 @@ export default function LearnedDevices({ circuits }: Props) {
                   <button
                     key={i}
                     onClick={() => handleSelectSuggestion(item, s.name)}
-                    className="w-full text-left px-3 py-2 rounded-lg bg-gray-800/40 border border-gray-700/40 hover:border-emerald-600/40 transition-colors"
+                    className="w-full text-left px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800/40 border border-gray-300 dark:border-gray-700/40 hover:border-emerald-600/40 transition-colors"
                   >
-                    <div className="text-xs text-gray-200">{s.name}</div>
+                    <div className="text-xs text-gray-800 dark:text-gray-200">{s.name}</div>
                     <div className="text-[10px] text-gray-500 mt-0.5">{s.reasoning}</div>
                   </button>
                 ))}
@@ -167,7 +167,7 @@ export default function LearnedDevices({ circuits }: Props) {
             <input
               type="text"
               placeholder="Or type the correct name..."
-              className="w-full px-3 py-1.5 text-xs rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-600 focus:outline-none focus:border-emerald-600"
+              className="w-full px-3 py-1.5 text-xs rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-emerald-600"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
                   handleSelectSuggestion(item, (e.target as HTMLInputElement).value.trim())

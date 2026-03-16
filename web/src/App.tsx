@@ -189,7 +189,7 @@ export default function App() {
 
       <main className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
         {page === 'circuits' && <Circuits />}
-        {page === 'categories' && dashboard && <Categories data={dashboard} />}
+        {page === 'categories' && dashboard && <Categories data={dashboard} dateRange={dateRange} onDateRangeChange={setDateRange} />}
         {page === 'settings' && <Settings />}
         {page === 'detail' && selectedCircuit && (
           <CircuitDetail
@@ -327,8 +327,8 @@ export default function App() {
                     SECTION 2: CIRCUITS & DEVICES
                     ═══════════════════════════════════════════ */}
 
-                <div className="border-t border-gray-800 pt-6 mt-2">
-                  <h2 className="text-base font-semibold text-gray-300 mb-4">Circuits & Devices</h2>
+                <div className="border-t border-gray-200 dark:border-gray-800 pt-6 mt-2">
+                  <h2 className="text-base font-semibold text-gray-700 dark:text-gray-300 mb-4">Circuits & Devices</h2>
                 </div>
 
                 {/* Power Now — per-circuit breakdown */}
@@ -351,8 +351,8 @@ export default function App() {
                     Solar readiness, annual forecast
                     ═══════════════════════════════════════════ */}
 
-                <div className="border-t border-gray-800 pt-6 mt-2">
-                  <h2 className="text-base font-semibold text-gray-300 mb-4">Solar & Energy Forecast</h2>
+                <div className="border-t border-gray-200 dark:border-gray-800 pt-6 mt-2">
+                  <h2 className="text-base font-semibold text-gray-700 dark:text-gray-300 mb-4">Solar & Energy Forecast</h2>
                 </div>
 
                 <section>

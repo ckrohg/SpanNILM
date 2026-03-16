@@ -9,13 +9,13 @@ export default function BillProjection({ projection, costDrivers }: Props) {
   const progressPct = (projection.days_elapsed / (projection.days_elapsed + projection.days_remaining)) * 100
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 sm:p-5">
+    <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-3 sm:p-5">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 sm:mb-4 gap-1 sm:gap-0">
         <div>
           <h3 className="text-[10px] sm:text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
             Projected Monthly Bill
           </h3>
-          <div className="text-2xl sm:text-3xl font-mono font-bold text-white">
+          <div className="text-2xl sm:text-3xl font-mono font-bold text-gray-900 dark:text-white">
             ${projection.projected_monthly_cost.toFixed(0)}
           </div>
           <div className="text-xs sm:text-sm text-gray-500 mt-0.5">
@@ -33,7 +33,7 @@ export default function BillProjection({ projection, costDrivers }: Props) {
           <span>Day {projection.days_elapsed}</span>
           <span>{projection.days_remaining} days left</span>
         </div>
-        <div className="h-1.5 sm:h-2 bg-gray-800 rounded-full overflow-hidden">
+        <div className="h-1.5 sm:h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
           <div
             className="h-full rounded-full bg-blue-500/80 transition-all duration-500"
             style={{ width: `${progressPct}%` }}
@@ -53,7 +53,7 @@ export default function BillProjection({ projection, costDrivers }: Props) {
                 <span className="text-[10px] sm:text-xs text-gray-400 w-20 sm:w-32 min-w-[5rem] sm:min-w-[8rem] truncate">
                   {driver.name}
                 </span>
-                <div className="flex-1 h-1.5 sm:h-2 bg-gray-800/60 rounded-full overflow-hidden">
+                <div className="flex-1 h-1.5 sm:h-2 bg-gray-200/60 dark:bg-gray-800/60 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full bg-emerald-500/60"
                     style={{ width: `${driver.pct_of_total}%` }}

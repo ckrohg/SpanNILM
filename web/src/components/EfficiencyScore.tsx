@@ -82,7 +82,7 @@ export default function EfficiencyScore({ data }: Props) {
   const strokeDashoffset = circumference * (1 - score / 100)
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl px-4 py-3">
+    <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3">
       <div className="flex items-center gap-5">
         {/* Circular gauge */}
         <div className="relative w-24 h-24 flex-shrink-0">
@@ -133,7 +133,7 @@ export default function EfficiencyScore({ data }: Props) {
 
           <p className="text-xs text-gray-400 leading-relaxed">
             Your always-on power is{' '}
-            <span className={`font-mono font-medium ${alwaysOnPct > 30 ? 'text-amber-400' : 'text-gray-300'}`}>
+            <span className={`font-mono font-medium ${alwaysOnPct > 30 ? 'text-amber-400' : 'text-gray-700 dark:text-gray-300'}`}>
               {alwaysOnPct}%
             </span>
             {' '}of total usage.
@@ -149,7 +149,7 @@ export default function EfficiencyScore({ data }: Props) {
 
           {/* Mini breakdown bar */}
           <div className="mt-2 flex items-center gap-2">
-            <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden flex">
+            <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden flex">
               <div
                 className={`h-full ${scoreBgColor(score)} opacity-60`}
                 style={{ width: `${score}%` }}

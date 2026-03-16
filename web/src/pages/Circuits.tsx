@@ -60,7 +60,7 @@ function CircuitRow({
   }
 
   return (
-    <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
+    <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
       <div className="flex items-start justify-between mb-3">
         <div>
           <h3 className="font-medium text-sm">{circuit.name}</h3>
@@ -89,7 +89,7 @@ function CircuitRow({
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder={circuit.name}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
         />
       </div>
 
@@ -100,8 +100,8 @@ function CircuitRow({
           onClick={() => { setIsDedicated(false); setDeviceType('') }}
           className={`px-3 py-1 text-xs rounded-lg transition-colors ${
             !isDedicated
-              ? 'bg-gray-700 text-white'
-              : 'bg-gray-800/50 text-gray-500 hover:text-gray-300'
+              ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+              : 'bg-gray-100 dark:bg-gray-800/50 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
           }`}
         >
           Shared
@@ -111,7 +111,7 @@ function CircuitRow({
           className={`px-3 py-1 text-xs rounded-lg transition-colors ${
             isDedicated
               ? 'bg-blue-600/30 text-blue-400 border border-blue-600/50'
-              : 'bg-gray-800/50 text-gray-500 hover:text-gray-300'
+              : 'bg-gray-100 dark:bg-gray-800/50 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
           }`}
         >
           Dedicated
@@ -127,7 +127,7 @@ function CircuitRow({
           <select
             value={deviceType}
             onChange={(e) => setDeviceType(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
           >
             <option value="">Select device type...</option>
             {DEVICE_TYPES.map((t) => (

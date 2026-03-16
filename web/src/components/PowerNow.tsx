@@ -81,11 +81,11 @@ function NamingModal({ equipmentId, clusterId, currentName, onClose, onNameSet }
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="bg-gray-900 border border-gray-700 rounded-xl max-w-md w-full p-5 space-y-4"
+        className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl max-w-md w-full p-5 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">Name this device</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Name this device</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -128,9 +128,9 @@ function NamingModal({ equipmentId, clusterId, currentName, onClose, onNameSet }
                 key={i}
                 onClick={() => saveName(s.name)}
                 disabled={saving}
-                className="w-full text-left px-3 py-2.5 rounded-lg bg-gray-800/60 border border-gray-700/50 hover:border-emerald-600/50 hover:bg-gray-800 transition-colors group"
+                className="w-full text-left px-3 py-2.5 rounded-lg bg-gray-100 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700/50 hover:border-emerald-600/50 hover:bg-gray-800 transition-colors group"
               >
-                <div className="text-sm text-gray-200 group-hover:text-emerald-300 transition-colors">
+                <div className="text-sm text-gray-800 dark:text-gray-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-300 transition-colors">
                   {s.name}
                 </div>
                 <div className="text-[11px] text-gray-500 mt-0.5">{s.reasoning}</div>
@@ -154,7 +154,7 @@ function NamingModal({ equipmentId, clusterId, currentName, onClose, onNameSet }
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
               placeholder="Type a custom name..."
-              className="flex-1 px-3 py-2 text-sm rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-600 focus:outline-none focus:border-emerald-600 transition-colors"
+              className="flex-1 px-3 py-2 text-sm rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-emerald-600 transition-colors"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && customName.trim()) {
                   saveName(customName.trim())
@@ -177,14 +177,14 @@ function NamingModal({ equipmentId, clusterId, currentName, onClose, onNameSet }
             <button
               onClick={() => saveName('Unidentified device')}
               disabled={saving}
-              className="flex-1 px-3 py-2 text-xs rounded-lg bg-gray-800/60 border border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-colors"
+              className="flex-1 px-3 py-2 text-xs rounded-lg bg-gray-100 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-colors"
             >
               I don't know what this is
             </button>
             <button
               onClick={() => saveName('Not a real device')}
               disabled={saving}
-              className="flex-1 px-3 py-2 text-xs rounded-lg bg-gray-800/60 border border-gray-700/50 text-gray-400 hover:text-red-400 hover:border-red-800 transition-colors"
+              className="flex-1 px-3 py-2 text-xs rounded-lg bg-gray-100 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700/50 text-gray-400 hover:text-red-400 hover:border-red-800 transition-colors"
             >
               This isn't a device
             </button>
@@ -222,7 +222,7 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
 
   if (!sorted.length) {
     return (
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 text-gray-500 text-center">
+      <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-6 text-gray-500 text-center">
         No circuit data
       </div>
     )
@@ -240,10 +240,10 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
           const corrs = circuit.correlations || []
 
           return (
-            <div key={circuit.equipment_id} className="bg-gray-900/40 rounded-lg border border-gray-800/50 overflow-hidden">
+            <div key={circuit.equipment_id} className="bg-gray-50 dark:bg-gray-900/40 rounded-lg border border-gray-200 dark:border-gray-800/50 overflow-hidden">
               {/* Circuit header row */}
               <div
-                className="flex items-center gap-2 sm:gap-3 px-2.5 sm:px-4 py-2 sm:py-2.5 cursor-pointer hover:bg-gray-800/30 transition-colors"
+                className="flex items-center gap-2 sm:gap-3 px-2.5 sm:px-4 py-2 sm:py-2.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/30 transition-colors"
                 onClick={() => setExpanded(isExpanded ? null : circuit.equipment_id)}
               >
                 <span
@@ -253,7 +253,7 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className={`text-xs sm:text-sm font-medium truncate max-w-[120px] sm:max-w-none ${isActive ? 'text-gray-100' : 'text-gray-400'}`}>
+                    <span className={`text-xs sm:text-sm font-medium truncate max-w-[120px] sm:max-w-none ${isActive ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>
                       {circuit.name}
                     </span>
                     {circuit.is_dedicated && circuit.device_type && (
@@ -263,7 +263,7 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                     )}
                   </div>
                   {/* Energy bar */}
-                  <div className="mt-1 h-1 sm:h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div className="mt-1 h-1 sm:h-1.5 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${circuit.is_dedicated ? 'bg-blue-500' : 'bg-emerald-500'}`}
                       style={{ width: `${Math.max(pct, 0.5)}%`, opacity: circuit.energy_today_kwh > 0.01 ? 0.8 : 0.1 }}
@@ -271,7 +271,7 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                   </div>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0 text-right">
-                  <span className={`text-xs sm:text-sm font-mono ${isActive ? 'text-gray-200' : 'text-gray-600'}`}>
+                  <span className={`text-xs sm:text-sm font-mono ${isActive ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-600'}`}>
                     {isActive ? formatPower(circuit.power_w) : '--'}
                   </span>
                   <span className="text-[10px] sm:text-xs text-gray-500 w-12 sm:w-16 hidden sm:block">
@@ -299,7 +299,7 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
 
               {/* Expanded: nested devices + details */}
               {isExpanded && (
-                <div className="border-t border-gray-800/50 bg-gray-950/50">
+                <div className="border-t border-gray-200 dark:border-gray-800/50 bg-gray-50 dark:bg-gray-950/50">
                   {/* Devices nested under circuit */}
                   {devices.length > 0 && (
                     <div className="px-4 py-2 space-y-1">
@@ -317,7 +317,7 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                             <div className="flex items-center gap-2 sm:gap-3">
                               {hasShapeData && <MiniSparkline curve={d.template_curve!} />}
                               <span
-                                className={`text-gray-200 font-medium flex-1 ${onDeviceClick ? 'cursor-pointer hover:text-emerald-300 transition-colors' : ''}`}
+                                className={`text-gray-800 dark:text-gray-200 font-medium flex-1 ${onDeviceClick ? 'cursor-pointer hover:text-emerald-300 transition-colors' : ''}`}
                                 onClick={(e) => {
                                   if (onDeviceClick) {
                                     e.stopPropagation()
@@ -400,10 +400,10 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                   )}
 
                   {/* Stats */}
-                  <div className="px-4 py-2 border-t border-gray-800/30 text-xs space-y-1.5">
-                    <div className="flex gap-6 text-gray-400">
-                      <span>Today: <span className="text-gray-300">{circuit.energy_today_kwh.toFixed(1)} kWh</span> <span className="text-green-500">${circuit.cost_today.toFixed(2)}</span></span>
-                      <span>Month: <span className="text-gray-300">{circuit.energy_month_kwh.toFixed(1)} kWh</span> <span className="text-green-500">${circuit.cost_month.toFixed(2)}</span></span>
+                  <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-800/30 text-xs space-y-1.5">
+                    <div className="flex gap-6 text-gray-500 dark:text-gray-400">
+                      <span>Today: <span className="text-gray-700 dark:text-gray-300">{circuit.energy_today_kwh.toFixed(1)} kWh</span> <span className="text-green-500">${circuit.cost_today.toFixed(2)}</span></span>
+                      <span>Month: <span className="text-gray-700 dark:text-gray-300">{circuit.energy_month_kwh.toFixed(1)} kWh</span> <span className="text-green-500">${circuit.cost_month.toFixed(2)}</span></span>
                       {circuit.always_on_w > 0 && (
                         <span>Always on: <span className="text-amber-400">{formatPower(circuit.always_on_w)}</span></span>
                       )}

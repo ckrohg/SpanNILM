@@ -196,10 +196,41 @@ class ShapeDetector:
     ) -> tuple[np.ndarray, list[Session]]:
         """Extract combined feature vectors for each session.
 
+        Features include:
+        - 32-point normalized power curve (shape)
+        - Amplitude: log peak/mean power, coefficient of variation, min/max ratio
+        - Temporal: log duration, circular hour encoding
+        - Pattern: phase count, startup surge, ramp rates
+        - Transition: startup shape (first 3 curve points), shutdown shape (last 3),
+          max derivative (distinguishes compressors, motors, resistive heaters)
+        - Energy: log energy per session (separates short vs long runs at same power)
+        - Time-of-use: 24-bin hour histogram, weekend/weekday ratio
+          (built from ALL sessions, appended per-session as context features)
+
         Returns (feature_matrix, valid_sessions) — sessions with valid features.
         """
         features_list = []
         valid_sessions = []
+
+        # --- Pre-compute time-of-use distributions across all sessions (#2) ---
+        hour_histogram = np.zeros(24)
+        weekday_count = 0
+        weekend_count = 0
+        for session in sessions:
+            h = session.start_time.hour
+            hour_histogram[h] += 1
+            if session.start_time.weekday() < 5:
+                weekday_count += 1
+            else:
+                weekend_count += 1
+        # Normalize histogram to fractions
+        total_sessions = hour_histogram.sum()
+        if total_sessions > 0:
+            hour_histogram = hour_histogram / total_sessions
+        # Weekend vs weekday ratio (normalized by number of days: 5 weekdays, 2 weekend)
+        weekday_rate = weekday_count / 5.0
+        weekend_rate = weekend_count / 2.0
+        weekend_weekday_ratio = weekend_rate / max(weekday_rate, 0.1)
 
         for session in sessions:
             curve = self._normalize_curve(session.power_curve)
@@ -275,12 +306,44 @@ class ShapeDetector:
                 np.sign(ramp_down) * np.log1p(abs(ramp_down)),
             ])
 
+            # --- Transition pattern features (#3) ---
+            # Startup shape: first 3 points of normalized curve
+            startup_shape = curve[:3]  # 3 values
+            # Shutdown shape: last 3 points of normalized curve
+            shutdown_shape = curve[-3:]  # 3 values
+            # Max derivative: maximum rate of change in the normalized curve
+            curve_diffs = np.diff(curve)
+            max_derivative = float(np.max(np.abs(curve_diffs))) if len(curve_diffs) > 0 else 0.0
+            transition_features = np.concatenate([
+                startup_shape,
+                shutdown_shape,
+                np.array([max_derivative]),
+            ])  # 7 values
+
+            # --- Energy signature (#4) ---
+            energy_wh = mean_w * session.duration_min / 60.0
+            energy_features = np.array([
+                np.log1p(energy_wh),  # Log energy per session
+            ])  # 1 value
+
+            # --- Time-of-use context features (#2) ---
+            # The 24-bin histogram and weekend ratio are the same for all sessions
+            # on this circuit, providing context about what kind of device schedule
+            # this circuit exhibits (overnight = EV, mealtimes = kitchen, etc.)
+            tou_features = np.concatenate([
+                hour_histogram,  # 24 values
+                np.array([weekend_weekday_ratio]),  # 1 value
+            ])  # 25 values
+
             # Combine all features
             feature_vec = np.concatenate([
-                shape_features * 2.0,  # Weight shape features more heavily
-                amplitude_features,
-                temporal_features,
-                pattern_features,
+                shape_features * 2.0,       # 32 values, weighted 2x
+                amplitude_features,          # 4 values
+                temporal_features,           # 3 values
+                pattern_features,            # 4 values
+                transition_features * 1.5,   # 7 values, weighted 1.5x (distinctive)
+                energy_features * 1.5,       # 1 value, weighted 1.5x
+                tou_features * 0.5,          # 25 values, weighted 0.5x (context, not per-session)
             ])
 
             features_list.append(feature_vec)

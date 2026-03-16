@@ -61,20 +61,20 @@ export default function EnergySummary({
     <div className="space-y-4">
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl px-3 sm:px-4 py-3">
+        <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl px-3 sm:px-4 py-3">
           <div className="text-[10px] sm:text-xs text-gray-500 mb-1">{displayLabel}</div>
-          <div className="text-lg sm:text-xl font-mono font-semibold text-white">
+          <div className="text-lg sm:text-xl font-mono font-semibold text-gray-900 dark:text-white">
             {formatEnergy(displayEnergy)}
           </div>
           <div className="text-xs sm:text-sm text-green-400 font-mono">
             {formatCost(displayCost)}
           </div>
         </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl px-3 sm:px-4 py-3">
+        <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl px-3 sm:px-4 py-3">
           <div className="text-[10px] sm:text-xs text-gray-500 mb-1">
             {isMonthView ? 'Today' : 'This Month'}
           </div>
-          <div className="text-lg sm:text-xl font-mono font-semibold text-white">
+          <div className="text-lg sm:text-xl font-mono font-semibold text-gray-900 dark:text-white">
             {formatEnergy(isMonthView ? totalEnergyToday : totalEnergyMonth)}
           </div>
           <div className="text-xs sm:text-sm text-green-400 font-mono">
@@ -85,7 +85,7 @@ export default function EnergySummary({
 
       {/* Top consumers */}
       {topConsumers.length > 0 && (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 sm:p-4">
+        <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-3 sm:p-4">
           <h3 className="text-[10px] sm:text-xs font-medium text-gray-400 mb-3 uppercase tracking-wide">
             Top Consumers — {displayLabel}
           </h3>
@@ -96,10 +96,10 @@ export default function EnergySummary({
               const pct = (energy / maxEnergy) * 100
               return (
                 <div key={circuit.equipment_id} className="flex items-center gap-2 sm:gap-3">
-                  <span className="text-xs sm:text-sm text-gray-300 w-24 sm:w-36 min-w-[6rem] sm:min-w-[9rem] truncate">
+                  <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 w-24 sm:w-36 min-w-[6rem] sm:min-w-[9rem] truncate">
                     {circuit.name}
                   </span>
-                  <div className="flex-1 h-2 sm:h-3 bg-gray-800/60 rounded-full overflow-hidden">
+                  <div className="flex-1 h-2 sm:h-3 bg-gray-200/60 dark:bg-gray-800/60 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full bg-emerald-500/70"
                       style={{ width: `${pct}%` }}
@@ -152,10 +152,10 @@ export default function EnergySummary({
                 const aoCostPeriod = (circuit.always_on_w * periodHours / 1000) * rate
                 return (
                   <div key={circuit.equipment_id} className="flex items-center gap-2 sm:gap-3">
-                    <span className="text-xs sm:text-sm text-gray-300 w-24 sm:w-36 min-w-[6rem] sm:min-w-[9rem] truncate">
+                    <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 w-24 sm:w-36 min-w-[6rem] sm:min-w-[9rem] truncate">
                       {circuit.name}
                     </span>
-                    <div className="flex-1 h-2 sm:h-3 bg-gray-800/60 rounded-full overflow-hidden">
+                    <div className="flex-1 h-2 sm:h-3 bg-gray-200/60 dark:bg-gray-800/60 rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full bg-amber-500/50"
                         style={{ width: `${pct}%` }}

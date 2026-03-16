@@ -32,7 +32,7 @@ export default function WeeklyDigest({ data }: Props) {
     : 0
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+    <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
       <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-4">
         Weekly Summary
       </h3>
@@ -40,7 +40,7 @@ export default function WeeklyDigest({ data }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
         <div>
           <div className="text-[10px] text-gray-500 uppercase mb-0.5">Total Energy</div>
-          <div className="text-lg font-mono font-semibold text-white">
+          <div className="text-lg font-mono font-semibold text-gray-900 dark:text-white">
             {weeklyKwh.toFixed(1)}
             <span className="text-xs text-gray-500 ml-1">kWh</span>
           </div>
@@ -53,7 +53,7 @@ export default function WeeklyDigest({ data }: Props) {
         </div>
         <div>
           <div className="text-[10px] text-gray-500 uppercase mb-0.5">Daily Average</div>
-          <div className="text-lg font-mono font-semibold text-white">
+          <div className="text-lg font-mono font-semibold text-gray-900 dark:text-white">
             {dailyAvgKwh.toFixed(1)}
             <span className="text-xs text-gray-500 ml-1">kWh</span>
           </div>
@@ -70,7 +70,7 @@ export default function WeeklyDigest({ data }: Props) {
       {topCircuit && (
         <div className="flex items-center gap-2 text-sm mb-2">
           <span className="text-gray-500">Most expensive:</span>
-          <span className="text-gray-200 font-medium">{topCircuit.name}</span>
+          <span className="text-gray-800 dark:text-gray-200 font-medium">{topCircuit.name}</span>
           <span className="font-mono text-green-500/80">
             ${topCircuit.cost_month.toFixed(2)}/mo
           </span>
@@ -79,9 +79,9 @@ export default function WeeklyDigest({ data }: Props) {
 
       {/* Top insight */}
       {biggestTrend && (
-        <div className="mt-3 pt-3 border-t border-gray-800/50">
+        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800/50">
           <div className="text-[10px] text-gray-500 uppercase mb-1">Top Insight</div>
-          <p className="text-sm text-gray-300">
+          <p className="text-sm text-gray-700 dark:text-gray-300">
             {biggestTrend.direction === 'up' ? (
               <span>
                 <span className="text-red-400 font-medium">{biggestTrend.circuit_name}</span>

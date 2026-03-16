@@ -11,7 +11,8 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import type { CircuitPower, DashboardData, TimelineBucket } from '../lib/api'
+import type { CircuitPower, DashboardData, TimelineBucket, DateRange } from '../lib/api'
+import DateRangePicker from '../components/DateRangePicker'
 
 type Category = 'HVAC' | 'EV Charging' | 'Kitchen' | 'Laundry' | 'Water' | 'Lighting & Outlets' | 'Other'
 
@@ -78,13 +79,25 @@ interface CategoryData {
   totalCostMonth: number
 }
 
+const PERIOD_LABELS: Record<DateRange, string> = {
+  today: 'Today',
+  yesterday: 'Yesterday',
+  '7d': 'Last 7 Days',
+  '30d': 'Last 30 Days',
+  month: 'This Month',
+  year: 'This Year',
+  '365d': 'Last 365 Days',
+}
+
 interface Props {
   data: DashboardData
+  dateRange?: DateRange
+  onDateRangeChange?: (range: DateRange) => void
 }
 
 function EnergyBar({ pct, color }: { pct: number; color: string }) {
   return (
-    <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+    <div className="w-full h-2 bg-gray-200 dark:bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
       <div
         className="h-full rounded-full transition-all duration-500"
         style={{ width: `${Math.max(1, pct)}%`, backgroundColor: color }}
@@ -101,8 +114,8 @@ function CategoryCard({ data, totalEnergyMonth }: { data: CategoryData; totalEne
 
   return (
     <div
-      className={`rounded-xl bg-gray-900/60 border border-gray-800 overflow-hidden cursor-pointer
-        hover:border-gray-700 transition-all duration-200 border-l-4 ${meta.border}`}
+      className={`rounded-xl bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 overflow-hidden cursor-pointer
+        hover:border-gray-300 dark:hover:border-gray-700 transition-all duration-200 border-l-4 ${meta.border}`}
       onClick={() => setExpanded(!expanded)}
     >
       <div className="p-4">
@@ -111,7 +124,7 @@ function CategoryCard({ data, totalEnergyMonth }: { data: CategoryData; totalEne
           <div className="flex items-center gap-2.5">
             <span className="text-xl">{meta.icon}</span>
             <div>
-              <h3 className="text-sm font-semibold text-white">{data.category}</h3>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{data.category}</h3>
               <span className="text-[10px] text-gray-500">{data.circuits.length} circuit{data.circuits.length !== 1 ? 's' : ''}</span>
             </div>
           </div>
@@ -128,7 +141,7 @@ function CategoryCard({ data, totalEnergyMonth }: { data: CategoryData; totalEne
                 />
               </span>
             )}
-            <span className="text-lg font-mono font-bold text-white">
+            <span className="text-lg font-mono font-bold text-gray-900 dark:text-white">
               {formatPower(data.totalPowerW)}
             </span>
           </div>
@@ -138,11 +151,11 @@ function CategoryCard({ data, totalEnergyMonth }: { data: CategoryData; totalEne
         <div className="grid grid-cols-2 gap-3 mb-3 text-xs">
           <div>
             <div className="text-gray-500">Today</div>
-            <div className="text-gray-200 font-medium">{formatEnergy(data.totalEnergyTodayKwh)}</div>
+            <div className="text-gray-800 dark:text-gray-200 font-medium">{formatEnergy(data.totalEnergyTodayKwh)}</div>
           </div>
           <div>
             <div className="text-gray-500">This Month</div>
-            <div className="text-gray-200 font-medium">{formatEnergy(data.totalEnergyMonthKwh)}</div>
+            <div className="text-gray-800 dark:text-gray-200 font-medium">{formatEnergy(data.totalEnergyMonthKwh)}</div>
           </div>
         </div>
 
@@ -163,14 +176,14 @@ function CategoryCard({ data, totalEnergyMonth }: { data: CategoryData; totalEne
 
       {/* Expanded: circuit list */}
       {expanded && (
-        <div className="border-t border-gray-800 bg-gray-950/40">
-          <div className="divide-y divide-gray-800/50">
+        <div className="border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950/40">
+          <div className="divide-y divide-gray-200 dark:divide-gray-800/50">
             {data.circuits
               .sort((a, b) => b.energy_month_kwh - a.energy_month_kwh)
               .map((c) => (
                 <div key={c.equipment_id} className="px-4 py-2.5 flex items-center justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs text-gray-300 truncate">{c.name}</div>
+                    <div className="text-xs text-gray-700 dark:text-gray-300 truncate">{c.name}</div>
                     <div className="text-[10px] text-gray-500 flex gap-3 mt-0.5">
                       <span>Today: {formatEnergy(c.energy_today_kwh)}</span>
                       <span>Month: {formatEnergy(c.energy_month_kwh)}</span>
@@ -190,7 +203,7 @@ function CategoryCard({ data, totalEnergyMonth }: { data: CategoryData; totalEne
                         />
                       </span>
                     )}
-                    <span className="text-xs font-mono text-gray-200">{formatPower(c.power_w)}</span>
+                    <span className="text-xs font-mono text-gray-700 dark:text-gray-200">{formatPower(c.power_w)}</span>
                   </div>
                 </div>
               ))}
@@ -307,14 +320,14 @@ function CategoryTimeline({ timeline }: { timeline: TimelineBucket[] }) {
 
   if (!timeline.length) {
     return (
-      <div className="h-48 sm:h-64 rounded-xl bg-gray-900/50 border border-gray-800 flex items-center justify-center text-gray-500">
+      <div className="h-48 sm:h-64 rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 flex items-center justify-center text-gray-500">
         No timeline data
       </div>
     )
   }
 
   return (
-    <div className="rounded-xl bg-gray-900/50 border border-gray-800 p-2 sm:p-4">
+    <div className="rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 p-2 sm:p-4">
       <div className="h-56 sm:h-72">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
@@ -396,13 +409,13 @@ function CategoryBillProjection({ data, categoryData }: { data: DashboardData; c
   const progressPct = (projection.days_elapsed / (projection.days_elapsed + projection.days_remaining)) * 100
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 sm:p-5">
+    <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-3 sm:p-5">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 sm:mb-4 gap-1 sm:gap-0">
         <div>
           <h3 className="text-[10px] sm:text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
             Projected Monthly Bill by Category
           </h3>
-          <div className="text-2xl sm:text-3xl font-mono font-bold text-white">
+          <div className="text-2xl sm:text-3xl font-mono font-bold text-gray-900 dark:text-white">
             ${projection.projected_monthly_cost.toFixed(0)}
           </div>
           <div className="text-xs sm:text-sm text-gray-500 mt-0.5">
@@ -420,7 +433,7 @@ function CategoryBillProjection({ data, categoryData }: { data: DashboardData; c
           <span>Day {projection.days_elapsed}</span>
           <span>{projection.days_remaining} days left</span>
         </div>
-        <div className="h-1.5 sm:h-2 bg-gray-800 rounded-full overflow-hidden">
+        <div className="h-1.5 sm:h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
           <div
             className="h-full rounded-full bg-blue-500/80 transition-all duration-500"
             style={{ width: `${progressPct}%` }}
@@ -442,7 +455,7 @@ function CategoryBillProjection({ data, categoryData }: { data: DashboardData; c
                 <span className="text-[10px] sm:text-xs text-gray-400 w-20 sm:w-32 min-w-[5rem] sm:min-w-[8rem] truncate">
                   {d.category}
                 </span>
-                <div className="flex-1 h-1.5 sm:h-2 bg-gray-800/60 rounded-full overflow-hidden">
+                <div className="flex-1 h-1.5 sm:h-2 bg-gray-200/60 dark:bg-gray-800/60 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{ width: `${d.pct}%`, backgroundColor: meta.color + 'aa' }}
@@ -517,7 +530,7 @@ function CategoryUsageTrends({ data, categoryData }: { data: DashboardData; cate
   const stable = categoryTrends.filter((t) => t.direction === 'stable')
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+    <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
       <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">
         Category Trends (vs last week)
       </h3>
@@ -528,7 +541,7 @@ function CategoryUsageTrends({ data, categoryData }: { data: DashboardData; cate
             <div key={t.category} className="flex items-center gap-2">
               <span className="text-red-400 text-sm w-5 flex-shrink-0">&#x2191;</span>
               <span className="text-sm flex-shrink-0 w-5">{meta.icon}</span>
-              <span className="text-sm text-gray-300 flex-1 truncate">{t.category}</span>
+              <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate">{t.category}</span>
               <span className="text-sm font-mono text-red-400 flex-shrink-0">
                 +{Math.round(t.changePct)}%
               </span>
@@ -544,7 +557,7 @@ function CategoryUsageTrends({ data, categoryData }: { data: DashboardData; cate
             <div key={t.category} className="flex items-center gap-2">
               <span className="text-green-400 text-sm w-5 flex-shrink-0">&#x2193;</span>
               <span className="text-sm flex-shrink-0 w-5">{meta.icon}</span>
-              <span className="text-sm text-gray-300 flex-1 truncate">{t.category}</span>
+              <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate">{t.category}</span>
               <span className="text-sm font-mono text-green-400 flex-shrink-0">
                 {Math.round(t.changePct)}%
               </span>
@@ -560,7 +573,7 @@ function CategoryUsageTrends({ data, categoryData }: { data: DashboardData; cate
             <div key={t.category} className="flex items-center gap-2">
               <span className="text-gray-500 text-sm w-5 flex-shrink-0">=</span>
               <span className="text-sm flex-shrink-0 w-5">{meta.icon}</span>
-              <span className="text-sm text-gray-300 flex-1 truncate">{t.category}</span>
+              <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate">{t.category}</span>
               <span className="text-sm font-mono text-gray-500 flex-shrink-0">
                 {t.changePct > 0 ? '+' : ''}{Math.round(t.changePct)}%
               </span>
@@ -582,7 +595,7 @@ function CategoryEnergySummary({ categoryData }: { categoryData: CategoryData[] 
   const maxMonth = sorted.length > 0 ? sorted[0].totalEnergyMonthKwh : 1
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 sm:p-5">
+    <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-3 sm:p-5">
       <h3 className="text-[10px] sm:text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">
         Energy by Category
       </h3>
@@ -595,20 +608,20 @@ function CategoryEnergySummary({ categoryData }: { categoryData: CategoryData[] 
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <span className="text-sm">{meta.icon}</span>
-                  <span className="text-xs text-gray-300">{d.category}</span>
+                  <span className="text-xs text-gray-700 dark:text-gray-300">{d.category}</span>
                 </div>
                 <div className="flex items-center gap-3 text-xs">
                   <div>
                     <span className="text-gray-500">Today: </span>
-                    <span className="font-mono text-gray-200">{formatEnergy(d.totalEnergyTodayKwh)}</span>
+                    <span className="font-mono text-gray-800 dark:text-gray-200">{formatEnergy(d.totalEnergyTodayKwh)}</span>
                   </div>
                   <div>
                     <span className="text-gray-500">Month: </span>
-                    <span className="font-mono text-gray-200">{formatEnergy(d.totalEnergyMonthKwh)}</span>
+                    <span className="font-mono text-gray-800 dark:text-gray-200">{formatEnergy(d.totalEnergyMonthKwh)}</span>
                   </div>
                 </div>
               </div>
-              <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+              <div className="h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
                   style={{ width: `${Math.max(1, barPct)}%`, backgroundColor: meta.color }}
@@ -640,7 +653,7 @@ function CategoryCostDonut({ categoryData }: { categoryData: CategoryData[] }) {
   if (donutData.length === 0) return null
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+    <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
       <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">
         Monthly Cost by Category
       </h3>
@@ -681,7 +694,7 @@ function CategoryCostDonut({ categoryData }: { categoryData: CategoryData[] }) {
           </ResponsiveContainer>
           {/* Center label */}
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-lg font-mono font-bold text-white">
+            <span className="text-lg font-mono font-bold text-gray-900 dark:text-white">
               ${totalCost.toFixed(0)}
             </span>
             <span className="text-[10px] text-gray-500">/month</span>
@@ -699,7 +712,7 @@ function CategoryCostDonut({ categoryData }: { categoryData: CategoryData[] }) {
                   className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                   style={{ backgroundColor: d.color }}
                 />
-                <span className="text-xs text-gray-300 truncate flex-1">
+                <span className="text-xs text-gray-700 dark:text-gray-300 truncate flex-1">
                   {d.name}
                 </span>
                 <span className="text-xs font-mono text-green-500/80 flex-shrink-0">
@@ -719,7 +732,7 @@ function CategoryCostDonut({ categoryData }: { categoryData: CategoryData[] }) {
 
 // ─── Main Component ─────────────────────────────────────────────────
 
-export default function Categories({ data }: Props) {
+export default function Categories({ data, dateRange = 'today', onDateRangeChange }: Props) {
   const { circuits } = data
 
   const categoryData = useMemo(() => {
@@ -758,10 +771,17 @@ export default function Categories({ data }: Props) {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Date Range Picker */}
+      {onDateRangeChange && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <DateRangePicker value={dateRange} onChange={onDateRangeChange} />
+        </div>
+      )}
+
       {/* Summary header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h2 className="text-base font-semibold text-white">Energy Categories</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Energy Categories — {PERIOD_LABELS[dateRange]}</h2>
           <p className="text-xs text-gray-500 mt-0.5">
             {categoryData.length} categories across {circuits.length} circuits
           </p>
@@ -769,11 +789,11 @@ export default function Categories({ data }: Props) {
         <div className="flex items-center gap-4 text-sm">
           <div>
             <span className="text-gray-500">Now: </span>
-            <span className="font-mono font-bold text-white">{formatPower(totalPowerNow)}</span>
+            <span className="font-mono font-bold text-gray-900 dark:text-white">{formatPower(totalPowerNow)}</span>
           </div>
           <div>
             <span className="text-gray-500">Month: </span>
-            <span className="font-mono font-bold text-white">{formatEnergy(totalEnergyMonth)}</span>
+            <span className="font-mono font-bold text-gray-900 dark:text-white">{formatEnergy(totalEnergyMonth)}</span>
           </div>
         </div>
       </div>

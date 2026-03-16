@@ -39,7 +39,7 @@ export default function CostBreakdown({ costDrivers, circuits }: Props) {
   const totalCost = data.reduce((sum, d) => sum + d.cost, 0)
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+    <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
       <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">
         Monthly Cost Breakdown
       </h3>
@@ -80,7 +80,7 @@ export default function CostBreakdown({ costDrivers, circuits }: Props) {
           </ResponsiveContainer>
           {/* Center label */}
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-lg font-mono font-bold text-white">
+            <span className="text-lg font-mono font-bold text-gray-900 dark:text-white">
               ${totalCost.toFixed(0)}
             </span>
             <span className="text-[10px] text-gray-500">total</span>
@@ -95,7 +95,7 @@ export default function CostBreakdown({ costDrivers, circuits }: Props) {
                 className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: d.color }}
               />
-              <span className="text-xs text-gray-300 truncate flex-1">
+              <span className="text-xs text-gray-700 dark:text-gray-300 truncate flex-1">
                 {d.name}
               </span>
               <span className="text-xs font-mono text-green-500/80 flex-shrink-0">
@@ -110,7 +110,7 @@ export default function CostBreakdown({ costDrivers, circuits }: Props) {
       </div>
 
       {/* Color key */}
-      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-800/50">
+      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-200 dark:border-gray-800/50">
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-blue-500" />
           <span className="text-[10px] text-gray-500">Dedicated</span>

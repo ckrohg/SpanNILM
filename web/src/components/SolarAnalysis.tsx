@@ -170,15 +170,15 @@ export default function SolarAnalysis({ data }: Props) {
 
         {/* Comparison table */}
         <div className="grid grid-cols-2 gap-4 mb-5">
-          <div className="bg-gray-800/40 rounded-lg p-3 border border-gray-800/50">
+          <div className="bg-gray-100 dark:bg-gray-800/40 rounded-lg p-3 border border-gray-200 dark:border-gray-800/50">
             <div className="text-[10px] text-gray-500 uppercase mb-1">Without Solar</div>
-            <div className="text-xl font-mono font-bold text-white">${currentMonthlyCost.toFixed(0)}<span className="text-sm text-gray-500">/mo</span></div>
+            <div className="text-xl font-mono font-bold text-gray-900 dark:text-white">${currentMonthlyCost.toFixed(0)}<span className="text-sm text-gray-500">/mo</span></div>
             <div className="text-[10px] text-gray-600 mt-1">${currentAnnualCost.toFixed(0)}/year</div>
             <div className="text-[10px] text-gray-600">{annualUsageKwh.toFixed(0)} kWh/yr from grid</div>
           </div>
           <div className="bg-yellow-900/10 rounded-lg p-3 border border-yellow-800/30">
             <div className="text-[10px] text-yellow-500 uppercase mb-1">With Solar</div>
-            <div className="text-xl font-mono font-bold text-white">${(totalWithSolar / 12).toFixed(0)}<span className="text-sm text-gray-500">/mo</span></div>
+            <div className="text-xl font-mono font-bold text-gray-900 dark:text-white">${(totalWithSolar / 12).toFixed(0)}<span className="text-sm text-gray-500">/mo</span></div>
             <div className="text-[10px] text-gray-600 mt-1">${totalWithSolar.toFixed(0)}/year total</div>
             <div className="text-[10px] text-gray-500">${solarPayment}/mo solar + ${(remainingGridCost / 12).toFixed(0)}/mo grid</div>
           </div>
@@ -186,35 +186,35 @@ export default function SolarAnalysis({ data }: Props) {
 
         {/* Details */}
         <div className="space-y-2 text-xs">
-          <div className="flex justify-between py-1 border-b border-gray-800/30">
+          <div className="flex justify-between py-1 border-b border-gray-200 dark:border-gray-800/30">
             <span className="text-gray-500">Solar production</span>
-            <span className="text-gray-300">{solarAnnualKwh.toLocaleString()} kWh/yr ({solarMonthlyKwh.toFixed(0)}/mo)</span>
+            <span className="text-gray-700 dark:text-gray-300">{solarAnnualKwh.toLocaleString()} kWh/yr ({solarMonthlyKwh.toFixed(0)}/mo)</span>
           </div>
-          <div className="flex justify-between py-1 border-b border-gray-800/30">
+          <div className="flex justify-between py-1 border-b border-gray-200 dark:border-gray-800/30">
             <span className="text-gray-500">Your usage</span>
-            <span className="text-gray-300">{annualUsageKwh.toFixed(0)} kWh/yr ({dailyAvgKwh.toFixed(0)} kWh/day)</span>
+            <span className="text-gray-700 dark:text-gray-300">{annualUsageKwh.toFixed(0)} kWh/yr ({dailyAvgKwh.toFixed(0)} kWh/day)</span>
           </div>
-          <div className="flex justify-between py-1 border-b border-gray-800/30">
+          <div className="flex justify-between py-1 border-b border-gray-200 dark:border-gray-800/30">
             <span className="text-gray-500">Solar offset</span>
             <span className={solarOffsetPct >= 100 ? 'text-green-400' : 'text-yellow-400'}>{solarOffsetPct}% of usage</span>
           </div>
-          <div className="flex justify-between py-1 border-b border-gray-800/30">
+          <div className="flex justify-between py-1 border-b border-gray-200 dark:border-gray-800/30">
             <span className="text-gray-500">Net metering</span>
-            <span className="text-gray-300">{netMetering ? 'Yes — excess credited' : 'No — excess lost'}</span>
+            <span className="text-gray-700 dark:text-gray-300">{netMetering ? 'Yes — excess credited' : 'No — excess lost'}</span>
           </div>
           {hasTou && (
-            <div className="flex justify-between py-1 border-b border-gray-800/30">
+            <div className="flex justify-between py-1 border-b border-gray-200 dark:border-gray-800/30">
               <span className="text-gray-500">TOU solar value</span>
               <span className="text-yellow-400">${solarEffectiveRate.toFixed(3)}/kWh avg (peak hours worth more)</span>
             </div>
           )}
-          <div className="flex justify-between py-1 border-b border-gray-800/30">
+          <div className="flex justify-between py-1 border-b border-gray-200 dark:border-gray-800/30">
             <span className="text-gray-500">Electricity saved</span>
             <span className="text-green-400">${annualSavingsFromSolar.toFixed(0)}/yr</span>
           </div>
-          <div className="flex justify-between py-1 border-b border-gray-800/30">
+          <div className="flex justify-between py-1 border-b border-gray-200 dark:border-gray-800/30">
             <span className="text-gray-500">Solar cost</span>
-            <span className="text-gray-300">${annualPayment.toFixed(0)}/yr (${solarPayment}/mo)</span>
+            <span className="text-gray-700 dark:text-gray-300">${annualPayment.toFixed(0)}/yr (${solarPayment}/mo)</span>
           </div>
           <div className="flex justify-between py-1 font-medium">
             <span className="text-gray-400">Net annual savings</span>
@@ -256,7 +256,7 @@ export default function SolarAnalysis({ data }: Props) {
         </div>
 
         {/* Insight */}
-        <div className="mt-4 bg-gray-800/30 rounded-lg px-4 py-3 border border-gray-800/50">
+        <div className="mt-4 bg-gray-100 dark:bg-gray-800/30 rounded-lg px-4 py-3 border border-gray-200 dark:border-gray-800/50">
           <p className="text-xs text-gray-400 leading-relaxed">
             {netMonthlySavings >= 0 ? (
               <>
@@ -284,14 +284,14 @@ export default function SolarAnalysis({ data }: Props) {
   const estimatedAnnualSavings = Math.min(dailyGenEstimate * 365, annualUsageKwh) * rate
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+    <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
       <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-4">
         Solar Readiness
       </h3>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
         <div>
           <div className="text-[10px] text-gray-500 uppercase mb-0.5">Daytime Usage</div>
-          <div className="text-xl font-mono font-bold text-white">{Math.round(daytimeFraction * 100)}%</div>
+          <div className="text-xl font-mono font-bold text-gray-900 dark:text-white">{Math.round(daytimeFraction * 100)}%</div>
           <div className="text-[10px] text-gray-600">10am-3pm ({daytimeKwhPerDay.toFixed(1)} kWh/day)</div>
         </div>
         <div>

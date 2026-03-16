@@ -108,7 +108,7 @@ export default function CircuitDetail({ equipmentId, onBack }: Props) {
             Back to Dashboard
           </button>
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-semibold text-white">{data.name}</h2>
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">{data.name}</h2>
             {data.is_dedicated && data.device_type && (
               <span className="text-xs px-2 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-800/50">
                 {data.device_type}
@@ -117,7 +117,7 @@ export default function CircuitDetail({ equipmentId, onBack }: Props) {
           </div>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-mono font-bold text-white">
+          <div className="text-2xl font-mono font-bold text-gray-900 dark:text-white">
             {data.energy_period_kwh.toFixed(1)} kWh
           </div>
           <div className="text-sm text-green-400 font-mono">
@@ -138,9 +138,9 @@ export default function CircuitDetail({ equipmentId, onBack }: Props) {
           { label: 'Always On', value: formatPower(data.always_on_w) },
           { label: 'Total Energy', value: `${data.energy_period_kwh.toFixed(1)} kWh` },
         ].map((stat) => (
-          <div key={stat.label} className="bg-gray-900/50 border border-gray-800 rounded-xl px-3 py-2.5">
+          <div key={stat.label} className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl px-3 py-2.5">
             <div className="text-[10px] text-gray-500 uppercase tracking-wide">{stat.label}</div>
-            <div className="text-lg font-mono font-semibold text-white mt-0.5">{stat.value}</div>
+            <div className="text-lg font-mono font-semibold text-gray-900 dark:text-white mt-0.5">{stat.value}</div>
           </div>
         ))}
       </div>
@@ -156,8 +156,8 @@ export default function CircuitDetail({ equipmentId, onBack }: Props) {
                 onClick={() => setPeriod(p)}
                 className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
                   period === p
-                    ? 'bg-gray-700 text-white'
-                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
                 }`}
               >
                 {p}d
@@ -165,7 +165,7 @@ export default function CircuitDetail({ equipmentId, onBack }: Props) {
             ))}
           </div>
         </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+        <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
           {powerChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <AreaChart data={powerChartData}>
@@ -218,7 +218,7 @@ export default function CircuitDetail({ equipmentId, onBack }: Props) {
       {dailyChartData.length > 1 && (
         <section>
           <h3 className="text-sm font-medium text-gray-400 mb-2">Daily Energy</h3>
-          <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+          <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={dailyChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
@@ -249,7 +249,7 @@ export default function CircuitDetail({ equipmentId, onBack }: Props) {
           <h3 className="text-sm font-medium text-gray-400 mb-2">
             Detected Devices ({data.devices.length})
           </h3>
-          <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-3">
+          <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-3">
             {data.devices.map((d, i) => {
               const conf = d.confidence
               const confColor = conf >= 0.7 ? 'text-green-400' : conf >= 0.4 ? 'text-yellow-400' : 'text-gray-500'
@@ -259,7 +259,7 @@ export default function CircuitDetail({ equipmentId, onBack }: Props) {
                     <MiniSparkline curve={d.template_curve} />
                   )}
                   <div className="flex-1">
-                    <div className="text-sm text-gray-200">{d.name.replace(/_/g, ' ')}</div>
+                    <div className="text-sm text-gray-800 dark:text-gray-200">{d.name.replace(/_/g, ' ')}</div>
                     <div className="text-xs text-gray-500 mt-0.5">
                       {d.session_count} sessions, {formatDuration(d.avg_duration_min)} avg, {d.energy_per_session_wh.toFixed(0)} Wh/session
                     </div>
@@ -288,7 +288,7 @@ export default function CircuitDetail({ equipmentId, onBack }: Props) {
                     ? 'border-amber-800/60'
                     : a.severity === 'alert'
                     ? 'border-red-800/60'
-                    : 'border-gray-800'
+                    : 'border-gray-200 dark:border-gray-800'
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -301,7 +301,7 @@ export default function CircuitDetail({ equipmentId, onBack }: Props) {
                         : 'bg-blue-400'
                     }`}
                   />
-                  <span className="text-sm text-gray-300">{a.timestamp}</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{a.timestamp}</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1 ml-4">{a.description}</p>
               </div>

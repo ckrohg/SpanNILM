@@ -97,7 +97,7 @@ function CustomTooltip({
 export default function StackedTimeline({ timeline, alwaysOnW }: Props) {
   if (!timeline.length) {
     return (
-      <div className="h-48 sm:h-64 rounded-xl bg-gray-900/50 border border-gray-800 flex items-center justify-center text-gray-500">
+      <div className="h-48 sm:h-64 rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 flex items-center justify-center text-gray-500">
         No timeline data
       </div>
     )
@@ -154,7 +154,7 @@ export default function StackedTimeline({ timeline, alwaysOnW }: Props) {
   }, [timeline])
 
   return (
-    <div className="rounded-xl bg-gray-900/50 border border-gray-800 p-2 sm:p-4">
+    <div className="rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 p-2 sm:p-4">
       <div className="h-56 sm:h-72">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>

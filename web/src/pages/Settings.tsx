@@ -178,8 +178,8 @@ export default function Settings() {
       </div>
 
       {/* Electricity Rate */}
-      <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-        <label className="text-sm font-medium text-gray-300 block mb-2">
+      <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
           Electricity Rate {billingMode === 'tou' ? '(fallback)' : ''}
         </label>
         <div className="flex items-center gap-3">
@@ -193,7 +193,7 @@ export default function Settings() {
               min="0"
               value={rate}
               onChange={(e) => setRate(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-7 pr-16 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg pl-7 pr-16 py-2 text-sm focus:border-blue-500 focus:outline-none"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
               /kWh
@@ -205,7 +205,7 @@ export default function Settings() {
             className={`px-4 py-2 text-sm rounded-lg transition-colors ${
               rateDirty
                 ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
             }`}
           >
             {saving.electricity_rate ? 'Saving...' : saved.electricity_rate ? 'Saved' : 'Save'}
@@ -219,8 +219,8 @@ export default function Settings() {
       </div>
 
       {/* TOU Billing Section */}
-      <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-        <label className="text-sm font-medium text-gray-300 block mb-3">
+      <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-3">
           Billing Mode
         </label>
         <div className="flex items-center gap-2 mb-4">
@@ -229,7 +229,7 @@ export default function Settings() {
             className={`px-4 py-2 text-sm rounded-lg transition-colors ${
               billingMode === 'flat'
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:text-gray-300'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
             Flat Rate
@@ -239,7 +239,7 @@ export default function Settings() {
             className={`px-4 py-2 text-sm rounded-lg transition-colors ${
               billingMode === 'tou'
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:text-gray-300'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
             Time-of-Use
@@ -257,7 +257,7 @@ export default function Settings() {
                   <select
                     value={tou.peak?.start ?? 14}
                     onChange={(e) => updateTouField('peak', 'start', parseInt(e.target.value))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
                   >
                     {HOURS.map((h) => (
                       <option key={h} value={h}>{formatHour(h)}</option>
@@ -269,7 +269,7 @@ export default function Settings() {
                   <select
                     value={tou.peak?.end ?? 19}
                     onChange={(e) => updateTouField('peak', 'end', parseInt(e.target.value))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
                   >
                     {HOURS.map((h) => (
                       <option key={h} value={h}>{formatHour(h)}</option>
@@ -284,7 +284,7 @@ export default function Settings() {
                     min="0"
                     value={tou.peak?.rate ?? 0.28}
                     onChange={(e) => updateTouField('peak', 'rate', parseFloat(e.target.value) || 0)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -292,7 +292,7 @@ export default function Settings() {
                   <select
                     value={tou.peak?.weekdays_only ? 'weekdays' : 'all'}
                     onChange={(e) => updateTouField('peak', 'weekdays_only', e.target.value === 'weekdays')}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
                   >
                     <option value="weekdays">Weekdays only</option>
                     <option value="all">All days</option>
@@ -310,7 +310,7 @@ export default function Settings() {
                   <select
                     value={tou.off_peak?.start ?? 21}
                     onChange={(e) => updateTouField('off_peak', 'start', parseInt(e.target.value))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
                   >
                     {HOURS.map((h) => (
                       <option key={h} value={h}>{formatHour(h)}</option>
@@ -322,7 +322,7 @@ export default function Settings() {
                   <select
                     value={tou.off_peak?.end ?? 9}
                     onChange={(e) => updateTouField('off_peak', 'end', parseInt(e.target.value))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
                   >
                     {HOURS.map((h) => (
                       <option key={h} value={h}>{formatHour(h)}</option>
@@ -337,7 +337,7 @@ export default function Settings() {
                     min="0"
                     value={tou.off_peak?.rate ?? 0.10}
                     onChange={(e) => updateTouField('off_peak', 'rate', parseFloat(e.target.value) || 0)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -352,7 +352,7 @@ export default function Settings() {
                   <select
                     value={tou.mid_peak?.start ?? 9}
                     onChange={(e) => updateTouField('mid_peak', 'start', parseInt(e.target.value))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
                   >
                     {HOURS.map((h) => (
                       <option key={h} value={h}>{formatHour(h)}</option>
@@ -364,7 +364,7 @@ export default function Settings() {
                   <select
                     value={tou.mid_peak?.end ?? 14}
                     onChange={(e) => updateTouField('mid_peak', 'end', parseInt(e.target.value))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
                   >
                     {HOURS.map((h) => (
                       <option key={h} value={h}>{formatHour(h)}</option>
@@ -379,7 +379,7 @@ export default function Settings() {
                     min="0"
                     value={tou.mid_peak?.rate ?? 0.18}
                     onChange={(e) => updateTouField('mid_peak', 'rate', parseFloat(e.target.value) || 0)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -394,7 +394,7 @@ export default function Settings() {
             className={`px-4 py-2 text-sm rounded-lg transition-colors ${
               billingModeDirty
                 ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
             }`}
           >
             {saving.tou_schedule ? 'Saving...' : saved.tou_schedule ? 'Saved' : 'Save Billing Mode'}
@@ -408,15 +408,15 @@ export default function Settings() {
       </div>
 
       {/* Timezone */}
-      <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-        <label className="text-sm font-medium text-gray-300 block mb-2">
+      <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
           Timezone
         </label>
         <div className="flex items-center gap-3">
           <select
             value={timezone}
             onChange={(e) => setTimezone(e.target.value)}
-            className="flex-1 max-w-xs bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            className="flex-1 max-w-xs bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
           >
             {US_TIMEZONES.map((tz) => (
               <option key={tz} value={tz}>
@@ -430,7 +430,7 @@ export default function Settings() {
             className={`px-4 py-2 text-sm rounded-lg transition-colors ${
               timezoneDirty
                 ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
             }`}
           >
             {saving.timezone ? 'Saving...' : saved.timezone ? 'Saved' : 'Save'}
@@ -442,15 +442,15 @@ export default function Settings() {
       </div>
 
       {/* Currency */}
-      <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-        <label className="text-sm font-medium text-gray-300 block mb-2">
+      <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
           Currency
         </label>
         <div className="flex items-center gap-3">
           <select
             value={currency}
             onChange={(e) => setCurrency(e.target.value)}
-            className="flex-1 max-w-xs bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            className="flex-1 max-w-xs bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
           >
             <option value="USD">USD ($)</option>
           </select>
@@ -460,7 +460,7 @@ export default function Settings() {
             className={`px-4 py-2 text-sm rounded-lg transition-colors ${
               currencyDirty
                 ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
             }`}
           >
             {saving.currency ? 'Saving...' : saved.currency ? 'Saved' : 'Save'}
@@ -477,8 +477,8 @@ export default function Settings() {
       </div>
 
       {/* Monthly Payment */}
-      <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-        <label className="text-sm font-medium text-gray-300 block mb-2">
+      <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
           Monthly Solar Payment
         </label>
         <div className="flex items-center gap-3">
@@ -491,7 +491,7 @@ export default function Settings() {
               value={solarPayment}
               onChange={(e) => setSolarPayment(e.target.value)}
               placeholder="e.g. 189"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-7 pr-12 py-2 text-sm focus:border-yellow-500 focus:outline-none"
+              className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg pl-7 pr-12 py-2 text-sm focus:border-yellow-500 focus:outline-none"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">/mo</span>
           </div>
@@ -501,7 +501,7 @@ export default function Settings() {
             className={`px-4 py-2 text-sm rounded-lg transition-colors ${
               solarPaymentDirty
                 ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
-                : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
             }`}
           >
             {saving.solar_monthly_payment ? 'Saving...' : saved.solar_monthly_payment ? 'Saved' : 'Save'}
@@ -513,8 +513,8 @@ export default function Settings() {
       </div>
 
       {/* Annual Production */}
-      <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-        <label className="text-sm font-medium text-gray-300 block mb-2">
+      <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
           Estimated Annual Solar Production
         </label>
         <div className="flex items-center gap-3">
@@ -526,7 +526,7 @@ export default function Settings() {
               value={solarAnnualKwh}
               onChange={(e) => setSolarAnnualKwh(e.target.value)}
               placeholder="e.g. 12000"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 pr-16 py-2 text-sm focus:border-yellow-500 focus:outline-none"
+              className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 pr-16 py-2 text-sm focus:border-yellow-500 focus:outline-none"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">kWh/yr</span>
           </div>
@@ -536,7 +536,7 @@ export default function Settings() {
             className={`px-4 py-2 text-sm rounded-lg transition-colors ${
               solarKwhDirty
                 ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
-                : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
             }`}
           >
             {saving.solar_annual_kwh ? 'Saving...' : saved.solar_annual_kwh ? 'Saved' : 'Save'}
@@ -548,15 +548,15 @@ export default function Settings() {
       </div>
 
       {/* Net Metering */}
-      <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-        <label className="text-sm font-medium text-gray-300 block mb-2">
+      <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
           Net Metering
         </label>
         <div className="flex items-center gap-3">
           <select
             value={netMetering}
             onChange={(e) => setNetMetering(e.target.value)}
-            className="flex-1 max-w-xs bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-yellow-500 focus:outline-none"
+            className="flex-1 max-w-xs bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-yellow-500 focus:outline-none"
           >
             <option value="yes">Yes — I get credited for excess production</option>
             <option value="no">No — excess production is not credited</option>
@@ -567,7 +567,7 @@ export default function Settings() {
             className={`px-4 py-2 text-sm rounded-lg transition-colors ${
               netMeteringDirty
                 ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
-                : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
             }`}
           >
             {saving.net_metering ? 'Saving...' : saved.net_metering ? 'Saved' : 'Save'}

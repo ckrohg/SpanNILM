@@ -77,7 +77,7 @@ export default function AlwaysOnCard({
 
       {/* Expanded breakdown */}
       {expanded && (
-        <div className="border-t border-amber-800/30 bg-gray-950/50 px-4 py-3">
+        <div className="border-t border-amber-800/30 bg-gray-50 dark:bg-gray-950/50 px-4 py-3">
           <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">
             Always-On Power by Circuit
           </div>
@@ -92,7 +92,7 @@ export default function AlwaysOnCard({
                 <div key={circuit.equipment_id} className="text-xs">
                   <div className="flex items-center justify-between mb-0.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-300 font-medium">{circuit.name}</span>
+                      <span className="text-gray-700 dark:text-gray-300 font-medium">{circuit.name}</span>
                       {circuit.is_dedicated && circuit.device_type && (
                         <span className="text-[9px] px-1 py-0.5 rounded bg-blue-900/40 text-blue-400 border border-blue-800/30">
                           {circuit.device_type}
@@ -105,7 +105,7 @@ export default function AlwaysOnCard({
                       <span className="text-green-500/70 w-14">${monthlyCost.toFixed(1)}/mo</span>
                     </div>
                   </div>
-                  <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
+                  <div className="h-1 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-amber-500/60 rounded-full"
                       style={{ width: `${barPct}%` }}

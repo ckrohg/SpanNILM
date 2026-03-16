@@ -11,7 +11,7 @@ export default function UsageTrends({ trends }: Props) {
   const down = trends.filter((t) => t.direction === 'down')
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+    <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
       <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">
         Usage Trends (vs last week)
       </h3>
@@ -21,7 +21,7 @@ export default function UsageTrends({ trends }: Props) {
             <span className="text-red-400 text-sm w-5 flex-shrink-0">
               &#x2191;
             </span>
-            <span className="text-sm text-gray-300 flex-1 truncate">
+            <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate">
               {t.circuit_name}
             </span>
             <span className="text-sm font-mono text-red-400 flex-shrink-0">
@@ -37,7 +37,7 @@ export default function UsageTrends({ trends }: Props) {
             <span className="text-green-400 text-sm w-5 flex-shrink-0">
               &#x2193;
             </span>
-            <span className="text-sm text-gray-300 flex-1 truncate">
+            <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate">
               {t.circuit_name}
             </span>
             <span className="text-sm font-mono text-green-400 flex-shrink-0">

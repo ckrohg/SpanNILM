@@ -24,7 +24,7 @@ export default function AnnualForecast() {
 
   if (loading) {
     return (
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+      <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
         <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-4">
           Annual Energy Forecast
         </h3>
@@ -37,7 +37,7 @@ export default function AnnualForecast() {
 
   if (error || !forecast) {
     return (
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+      <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
         <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-4">
           Annual Energy Forecast
         </h3>
@@ -65,7 +65,7 @@ export default function AnnualForecast() {
   const projectedCount = 12 - actualCount
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+    <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide">
           Annual Energy Forecast
@@ -79,13 +79,13 @@ export default function AnnualForecast() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         <div>
           <div className="text-[10px] text-gray-500 uppercase mb-0.5">Annual Usage</div>
-          <div className="text-lg font-mono font-bold text-white">
+          <div className="text-lg font-mono font-bold text-gray-900 dark:text-white">
             {Math.round(forecast.annual_usage_kwh).toLocaleString()} kWh
           </div>
         </div>
         <div>
           <div className="text-[10px] text-gray-500 uppercase mb-0.5">Cost (No Solar)</div>
-          <div className="text-lg font-mono font-bold text-white">
+          <div className="text-lg font-mono font-bold text-gray-900 dark:text-white">
             {formatCurrency(forecast.annual_cost_without_solar)}
           </div>
         </div>
@@ -93,7 +93,7 @@ export default function AnnualForecast() {
           <>
             <div>
               <div className="text-[10px] text-gray-500 uppercase mb-0.5">Cost (With Solar)</div>
-              <div className="text-lg font-mono font-bold text-white">
+              <div className="text-lg font-mono font-bold text-gray-900 dark:text-white">
                 {formatCurrency(forecast.annual_cost_with_solar)}
               </div>
             </div>
@@ -145,13 +145,13 @@ export default function AnnualForecast() {
                         <span style={{ color: p.color }}>
                           {p.name === 'usage' ? 'Usage' : p.name === 'solar' ? 'Solar' : p.name === 'temp' ? 'Temp' : p.name}
                         </span>
-                        <span className="font-mono text-gray-300">
+                        <span className="font-mono text-gray-700 dark:text-gray-300">
                           {p.name === 'temp' ? `${p.value}°F` : `${p.value?.toLocaleString()} kWh`}
                         </span>
                       </div>
                     ))}
                     {entry?.priorYear != null && (
-                      <div className="flex justify-between gap-4 mt-1.5 pt-1.5 border-t border-gray-700">
+                      <div className="flex justify-between gap-4 mt-1.5 pt-1.5 border-t border-gray-300 dark:border-gray-700">
                         <span className="text-gray-500">Last year</span>
                         <span className="font-mono text-gray-400">
                           {entry.priorYear.toLocaleString()} kWh
@@ -164,7 +164,7 @@ export default function AnnualForecast() {
                       </div>
                     )}
                     {!entry?.isActual && !entry?.priorYear && (
-                      <div className="mt-1.5 pt-1.5 border-t border-gray-700 text-gray-600 italic">
+                      <div className="mt-1.5 pt-1.5 border-t border-gray-300 dark:border-gray-700 text-gray-600 italic">
                         No prior year data available
                       </div>
                     )}
@@ -244,7 +244,7 @@ export default function AnnualForecast() {
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-gray-500 uppercase text-[10px] border-b border-gray-800">
+            <tr className="text-gray-500 uppercase text-[10px] border-b border-gray-200 dark:border-gray-800">
               <th className="text-left py-2 pr-2">Month</th>
               <th className="text-right py-2 px-2">Usage</th>
               <th className="text-right py-2 px-2">Temp</th>
@@ -264,15 +264,15 @@ export default function AnnualForecast() {
             {months.map((m) => (
               <tr
                 key={m.month}
-                className={`border-b border-gray-800/50 ${m.is_actual ? '' : 'text-gray-500'}`}
+                className={`border-b border-gray-200 dark:border-gray-800/50 ${m.is_actual ? '' : 'text-gray-500'}`}
               >
                 <td className="py-1.5 pr-2">
-                  <span className="text-gray-300">{m.month_name.substring(0, 3)}</span>
+                  <span className="text-gray-700 dark:text-gray-300">{m.month_name.substring(0, 3)}</span>
                   {!m.is_actual && (
                     <span className="ml-1 text-[9px] text-blue-400/60 italic">est</span>
                   )}
                 </td>
-                <td className="text-right py-1.5 px-2 font-mono text-gray-300">
+                <td className="text-right py-1.5 px-2 font-mono text-gray-700 dark:text-gray-300">
                   {Math.round(m.usage_kwh).toLocaleString()}
                 </td>
                 <td className="text-right py-1.5 px-2 font-mono text-orange-400/70">
@@ -292,7 +292,7 @@ export default function AnnualForecast() {
                      'projected'}
                   </span>
                 </td>
-                <td className="text-right py-1.5 px-2 font-mono text-gray-300">
+                <td className="text-right py-1.5 px-2 font-mono text-gray-700 dark:text-gray-300">
                   ${Math.round(m.cost_without_solar)}
                 </td>
                 {has_solar_quote && (
@@ -300,7 +300,7 @@ export default function AnnualForecast() {
                     <td className="text-right py-1.5 px-2 font-mono text-yellow-400/70">
                       {Math.round(m.solar_production_kwh).toLocaleString()}
                     </td>
-                    <td className="text-right py-1.5 px-2 font-mono text-gray-300">
+                    <td className="text-right py-1.5 px-2 font-mono text-gray-700 dark:text-gray-300">
                       ${Math.round(m.cost_with_solar)}
                     </td>
                     <td className={`text-right py-1.5 px-2 font-mono ${m.savings >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -312,15 +312,15 @@ export default function AnnualForecast() {
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t border-gray-700 font-medium">
-              <td className="py-2 pr-2 text-gray-300">Annual</td>
-              <td className="text-right py-2 px-2 font-mono text-white">
+            <tr className="border-t border-gray-300 dark:border-gray-700 font-medium">
+              <td className="py-2 pr-2 text-gray-700 dark:text-gray-300">Annual</td>
+              <td className="text-right py-2 px-2 font-mono text-gray-900 dark:text-white">
                 {Math.round(forecast.annual_usage_kwh).toLocaleString()}
               </td>
               <td className="text-right py-2 px-2 font-mono text-gray-600">--</td>
               <td className="text-right py-2 px-2 font-mono text-gray-600">--</td>
               <td className="text-right py-2 px-2 font-mono text-gray-600">--</td>
-              <td className="text-right py-2 px-2 font-mono text-white">
+              <td className="text-right py-2 px-2 font-mono text-gray-900 dark:text-white">
                 {formatCurrency(forecast.annual_cost_without_solar)}
               </td>
               {has_solar_quote && (
@@ -328,7 +328,7 @@ export default function AnnualForecast() {
                   <td className="text-right py-2 px-2 font-mono text-yellow-400/70">
                     --
                   </td>
-                  <td className="text-right py-2 px-2 font-mono text-white">
+                  <td className="text-right py-2 px-2 font-mono text-gray-900 dark:text-white">
                     {formatCurrency(forecast.annual_cost_with_solar)}
                   </td>
                   <td className={`text-right py-2 px-2 font-mono font-bold ${forecast.annual_savings >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -365,10 +365,10 @@ export default function AnnualForecast() {
         <summary className="text-gray-500 cursor-pointer hover:text-gray-400 transition-colors">
           How is this forecast calculated?
         </summary>
-        <div className="mt-2 bg-gray-800/30 border border-gray-800/50 rounded-lg px-4 py-3 space-y-2">
+        <div className="mt-2 bg-gray-100 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800/50 rounded-lg px-4 py-3 space-y-2">
           <p className="text-gray-400 leading-relaxed">{forecast.methodology}</p>
           {forecast.regression_formula && (
-            <p className="text-gray-500 font-mono text-[11px] bg-gray-900/50 px-3 py-1.5 rounded">
+            <p className="text-gray-500 font-mono text-[11px] bg-gray-50 dark:bg-gray-900/50 px-3 py-1.5 rounded">
               {forecast.regression_formula}
             </p>
           )}
