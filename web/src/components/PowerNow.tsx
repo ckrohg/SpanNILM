@@ -347,10 +347,10 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                                       setTimeout(() => setRenamedDevices(prev => ({ ...prev, [deviceKey]: displayName })), 2000)
                                     })
                                 }}
-                                className="px-2 py-0.5 rounded text-[10px] bg-green-900/30 text-green-400 border border-green-800/50 hover:bg-green-800/40 transition-colors"
+                                className="px-2 py-0.5 rounded text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/40 transition-colors"
                                 title="Confirm this is correct"
                               >
-                                ✓ Correct
+                                ✓ Yes, correct
                               </button>
                               <button
                                 onClick={(e) => {
@@ -361,21 +361,21 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                                     name: displayName,
                                   })
                                 }}
-                                className="px-2 py-0.5 rounded text-[10px] bg-yellow-900/30 text-yellow-400 border border-yellow-800/50 hover:bg-yellow-800/40 transition-colors"
-                                title="This is wrong — rename it"
+                                className="px-2 py-0.5 rounded text-[10px] bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-800/50 hover:bg-yellow-200 dark:hover:bg-yellow-800/40 transition-colors"
+                                title="Not quite right — rename it"
                               >
-                                ✗ Wrong
+                                Not quite right
                               </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  setDeviceName(circuit.equipment_id, i, 'Unknown device')
-                                    .then(() => setRenamedDevices(prev => ({ ...prev, [deviceKey]: 'Unknown device' })))
+                                  setDeviceName(circuit.equipment_id, i, '[SUPPRESSED] I don\'t have this')
+                                    .then(() => setRenamedDevices(prev => ({ ...prev, [deviceKey]: 'Suppressed' })))
                                 }}
-                                className="px-2 py-0.5 rounded text-[10px] bg-gray-800/50 text-gray-500 border border-gray-700/50 hover:bg-gray-700/40 transition-colors"
-                                title="Not a real device"
+                                className="px-2 py-0.5 rounded text-[10px] bg-gray-100 dark:bg-gray-800/50 text-gray-500 border border-gray-300 dark:border-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700/40 transition-colors"
+                                title="I don't have one of these"
                               >
-                                Not a device
+                                Don't have this
                               </button>
                             </div>
                             {hasShapeData && (
@@ -405,7 +405,7 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                       <span>Today: <span className="text-gray-700 dark:text-gray-300">{circuit.energy_today_kwh.toFixed(1)} kWh</span> <span className="text-green-500">${circuit.cost_today.toFixed(2)}</span></span>
                       <span>Month: <span className="text-gray-700 dark:text-gray-300">{circuit.energy_month_kwh.toFixed(1)} kWh</span> <span className="text-green-500">${circuit.cost_month.toFixed(2)}</span></span>
                       {circuit.always_on_w > 0 && (
-                        <span>Always on: <span className="text-amber-400">{formatPower(circuit.always_on_w)}</span></span>
+                        <span>Always on: <span className="text-amber-700 dark:text-amber-400">{formatPower(circuit.always_on_w)}</span></span>
                       )}
                     </div>
 

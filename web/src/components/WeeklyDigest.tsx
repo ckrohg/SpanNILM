@@ -60,7 +60,7 @@ export default function WeeklyDigest({ data }: Props) {
         </div>
         <div>
           <div className="text-[10px] text-gray-500 uppercase mb-0.5">Always On</div>
-          <div className="text-lg font-mono font-semibold text-amber-400">
+          <div className="text-lg font-mono font-semibold text-amber-700 dark:text-amber-400">
             {alwaysOnPct}%
           </div>
         </div>

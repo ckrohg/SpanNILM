@@ -53,12 +53,25 @@ export default function LearnedDevices({ circuits }: Props) {
     }
   }
 
-  // Sort: high confidence first (these are the best candidates for review)
-  allDevices.sort((a, b) => b.device.confidence - a.device.confidence)
+  // Deduplicate: if same device name appears multiple times on same circuit,
+  // keep only the one with highest session count (it's likely the same device
+  // detected at different power levels, not multiple identical devices)
+  const seen = new Map<string, DeviceWithCircuit>()
+  for (const item of allDevices) {
+    const key = `${item.circuit.equipment_id}::${item.device.name}`
+    const existing = seen.get(key)
+    if (!existing || item.device.session_count > existing.device.session_count) {
+      seen.set(key, item)
+    }
+  }
+  const deduplicated = Array.from(seen.values())
+
+  // Sort: high confidence first
+  deduplicated.sort((a, b) => b.device.confidence - a.device.confidence)
 
   // Split into high confidence (ready for review) and learning
-  const readyForReview = allDevices.filter(d => d.device.confidence >= 0.7)
-  const stillLearning = allDevices.filter(d => d.device.confidence >= 0.3 && d.device.confidence < 0.7)
+  const readyForReview = deduplicated.filter(d => d.device.confidence >= 0.7)
+  const stillLearning = deduplicated.filter(d => d.device.confidence >= 0.3 && d.device.confidence < 0.7)
 
   if (readyForReview.length === 0 && stillLearning.length === 0) return null
 
@@ -119,19 +132,19 @@ export default function LearnedDevices({ circuits }: Props) {
               onClick={() => handleConfirm(item)}
               className="px-2.5 py-1 text-[11px] rounded bg-green-900/40 text-green-400 border border-green-800/50 hover:bg-green-800/50 transition-colors"
             >
-              ✓ Correct
+              ✓ Yes, correct
             </button>
             <button
               onClick={() => setConfirming(isConfirmingThis ? null : key)}
-              className="px-2.5 py-1 text-[11px] rounded bg-yellow-900/30 text-yellow-400 border border-yellow-800/50 hover:bg-yellow-800/40 transition-colors"
+              className="px-2.5 py-1 text-[11px] rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-800/50 hover:bg-yellow-200 dark:hover:bg-yellow-800/40 transition-colors"
             >
-              ✗ Wrong
+              Not quite right
             </button>
             <button
               onClick={() => handleSelectSuggestion(item, '[SUPPRESSED] I don\'t have this')}
-              className="px-2.5 py-1 text-[11px] rounded bg-gray-800/50 text-gray-500 border border-gray-700/50 hover:text-gray-300 transition-colors"
+              className="px-2.5 py-1 text-[11px] rounded bg-gray-100 dark:bg-gray-800/50 text-gray-500 border border-gray-300 dark:border-gray-700/50 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
             >
-              Not mine
+              Don't have this
             </button>
           </div>
         </div>

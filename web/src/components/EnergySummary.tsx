@@ -139,10 +139,10 @@ export default function EnergySummary({
         return (
           <div className="bg-amber-900/10 border border-amber-800/30 rounded-xl p-3 sm:p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[10px] sm:text-xs font-medium text-amber-400/80 uppercase tracking-wide">
+              <h3 className="text-[10px] sm:text-xs font-medium text-amber-700 dark:text-amber-400/80 uppercase tracking-wide">
                 Top Always-On Loads
               </h3>
-              <span className="text-[10px] text-amber-400/60">
+              <span className="text-[10px] text-amber-700 dark:text-amber-400/60">
                 ~{formatCost(totalAOCost)} during {displayLabel.toLowerCase()}
               </span>
             </div>
@@ -161,12 +161,12 @@ export default function EnergySummary({
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <span className="text-[10px] sm:text-xs font-mono text-amber-300 w-14 sm:w-16 text-right">
+                    <span className="text-[10px] sm:text-xs font-mono text-amber-700 dark:text-amber-300 w-14 sm:w-16 text-right">
                       {circuit.always_on_w >= 1000
                         ? `${(circuit.always_on_w / 1000).toFixed(1)} kW`
                         : `${Math.round(circuit.always_on_w)} W`}
                     </span>
-                    <span className="text-[10px] sm:text-xs font-mono text-amber-400/60 w-10 sm:w-14 text-right">
+                    <span className="text-[10px] sm:text-xs font-mono text-amber-700 dark:text-amber-400/60 w-10 sm:w-14 text-right">
                       {formatCost(aoCostPeriod)}
                     </span>
                   </div>

@@ -46,15 +46,15 @@ export default function AlwaysOnCard({
       >
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-xs text-amber-400/70 uppercase tracking-wide font-medium mb-1">
+            <div className="text-xs text-amber-700 dark:text-amber-400/70 uppercase tracking-wide font-medium mb-1">
               Always On
             </div>
-            <div className="text-2xl font-mono font-bold text-amber-300">
+            <div className="text-2xl font-mono font-bold text-amber-700 dark:text-amber-300">
               {formatPower(alwaysOnW)}
             </div>
           </div>
           <div className="text-right">
-            <div className="text-sm text-amber-400/80 font-mono">
+            <div className="text-sm text-amber-700 dark:text-amber-400/80 font-mono">
               {pctOfPower}% of current
             </div>
             <div className="text-xs text-gray-500">
@@ -100,7 +100,7 @@ export default function AlwaysOnCard({
                       )}
                     </div>
                     <div className="flex items-center gap-3 text-right">
-                      <span className="font-mono text-amber-300">{formatPower(circuit.always_on_w)}</span>
+                      <span className="font-mono text-amber-700 dark:text-amber-300">{formatPower(circuit.always_on_w)}</span>
                       <span className="text-gray-500 w-10">{pct.toFixed(0)}%</span>
                       <span className="text-green-500/70 w-14">${monthlyCost.toFixed(1)}/mo</span>
                     </div>
@@ -118,10 +118,10 @@ export default function AlwaysOnCard({
 
           {/* Insight */}
           <div className="mt-4 bg-amber-900/10 border border-amber-800/30 rounded-lg px-3 py-2">
-            <p className="text-xs text-amber-400/80 leading-relaxed">
+            <p className="text-xs text-amber-700 dark:text-amber-400/80 leading-relaxed">
               {circuitBreakdown.length > 0 && (
                 <>
-                  Your biggest always-on load is <span className="text-amber-300 font-medium">{circuitBreakdown[0].name}</span> at {formatPower(circuitBreakdown[0].always_on_w)}.
+                  Your biggest always-on load is <span className="text-amber-700 dark:text-amber-300 font-medium">{circuitBreakdown[0].name}</span> at {formatPower(circuitBreakdown[0].always_on_w)}.
                   {' '}Reducing standby power across all circuits by just 25% would save{' '}
                   <span className="text-green-400 font-medium">
                     ~${(alwaysOnAnnualCost * 0.25).toFixed(0)}/year
