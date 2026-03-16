@@ -355,6 +355,21 @@ def get_dashboard(
             always_on_map[str(cid)] = max(0, p10)
 
     # 4. Load circuit profiles for detected devices + temporal + correlations
+    # Also load device labels to get user-confirmed names and suppressed devices
+    device_labels: dict[str, dict] = {}  # key: "equip_id-cluster_id" -> {name, source}
+    try:
+        conn = _get_spannilm_db()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT equipment_id, cluster_id, name, source FROM device_labels")
+                for r in cur.fetchall():
+                    key = f"{r['equipment_id']}-{r['cluster_id']}"
+                    device_labels[key] = {"name": r["name"], "source": r["source"]}
+        finally:
+            conn.close()
+    except Exception:
+        pass  # table may not exist yet
+
     profile_devices: dict[str, list[DetectedDevice]] = {}
     profile_temporal: dict[str, TemporalInfo] = {}
     profile_correlations: dict[str, list[CorrelationInfo]] = {}
@@ -369,12 +384,26 @@ def get_dashboard(
                 devices = []
                 shape_devs = row.get("shape_devices") or []
                 if shape_devs:
-                    for sd in shape_devs:
+                    for idx, sd in enumerate(shape_devs):
+                        cluster_id = sd.get("cluster_id", idx)
+                        label_key = f"{eid}-{cluster_id}"
+                        label = device_labels.get(label_key)
+
+                        # Skip suppressed devices
+                        if label and "[SUPPRESSED]" in label["name"]:
+                            continue
+                        # Skip "Not a real device" labels
+                        if label and label["name"] == "Not a real device":
+                            continue
+
+                        # Use user-confirmed name if available
+                        dev_name = label["name"] if label else sd["name"]
+
                         spd = sd.get("sessions_per_day", 0)
                         avg_dur = sd.get("avg_duration_min", 0)
                         pct = spd * avg_dur / 1440 * 100
                         devices.append(DetectedDevice(
-                            name=sd["name"],
+                            name=dev_name,
                             power_w=sd.get("avg_power_w", 0),
                             confidence=sd.get("confidence", 0),
                             pct_of_time=round(pct, 2),
