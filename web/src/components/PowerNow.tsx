@@ -313,7 +313,7 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                         const deviceKey = `${circuit.equipment_id}-${i}`
                         const displayName = renamedDevices[deviceKey] || d.name
                         return (
-                          <div key={i} className={`pl-3 sm:pl-5 py-2 text-xs border-b border-gray-800/30 last:border-0 ${d.suppressed_on_other_circuit ? 'opacity-60' : ''}`}>
+                          <div key={i} className={`pl-3 sm:pl-5 py-2 text-xs border-b border-gray-200 dark:border-gray-800/30 last:border-0 ${d.suppressed_on_other_circuit ? 'opacity-60' : ''}`}>
                             <div className="flex items-center gap-2 sm:gap-3">
                               {hasShapeData && <MiniSparkline curve={d.template_curve!} />}
                               <span

@@ -139,7 +139,7 @@ export default function DeviceDetail({ equipmentId, clusterId, onBack }: Props) 
             </svg>
             Back
           </button>
-          <h2 className="text-2xl font-semibold text-white">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
             {data.name.replace(/_/g, ' ')}
           </h2>
           <p className="text-sm text-gray-500 mt-0.5">
@@ -151,7 +151,7 @@ export default function DeviceDetail({ equipmentId, clusterId, onBack }: Props) 
             <TemplateSparkline curve={data.template_curve} />
           )}
           <div>
-            <div className="text-2xl font-mono font-bold text-white">
+            <div className="text-2xl font-mono font-bold text-gray-900 dark:text-white">
               {data.total_energy_kwh.toFixed(1)} kWh
             </div>
             <div className="text-xs text-gray-500 mt-0.5">
@@ -170,9 +170,9 @@ export default function DeviceDetail({ equipmentId, clusterId, onBack }: Props) 
           { label: 'Total Sessions', value: String(data.total_sessions) },
           { label: 'Total Energy', value: `${data.total_energy_kwh.toFixed(1)} kWh` },
         ].map((stat) => (
-          <div key={stat.label} className="bg-gray-900/50 border border-gray-800 rounded-xl px-3 py-2.5">
+          <div key={stat.label} className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl px-3 py-2.5">
             <div className="text-[10px] text-gray-500 uppercase tracking-wide">{stat.label}</div>
-            <div className="text-lg font-mono font-semibold text-white mt-0.5">{stat.value}</div>
+            <div className="text-lg font-mono font-semibold text-gray-900 dark:text-white mt-0.5">{stat.value}</div>
           </div>
         ))}
       </div>
@@ -185,8 +185,8 @@ export default function DeviceDetail({ equipmentId, clusterId, onBack }: Props) 
             onClick={() => setPeriod(p)}
             className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
               period === p
-                ? 'bg-gray-700 text-white'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
+                ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
             }`}
           >
             {p}d
@@ -198,7 +198,7 @@ export default function DeviceDetail({ equipmentId, clusterId, onBack }: Props) 
       {dailyChartData.length > 1 && (
         <section>
           <h3 className="text-sm font-medium text-gray-400 mb-2">Daily Energy</h3>
-          <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+          <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={dailyChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
@@ -224,7 +224,7 @@ export default function DeviceDetail({ equipmentId, clusterId, onBack }: Props) 
       {data.sessions.length > 0 && (
         <section>
           <h3 className="text-sm font-medium text-gray-400 mb-2">Usage by Hour of Day</h3>
-          <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+          <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={peakHoursData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
@@ -252,7 +252,7 @@ export default function DeviceDetail({ equipmentId, clusterId, onBack }: Props) 
         <h3 className="text-sm font-medium text-gray-400 mb-2">
           Sessions ({data.sessions.length})
         </h3>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden">
+        <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
           {data.sessions.length === 0 ? (
             <div className="p-6 text-center text-gray-600 text-sm">
               No matching sessions found in this period
@@ -261,7 +261,7 @@ export default function DeviceDetail({ equipmentId, clusterId, onBack }: Props) 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase tracking-wider">
+                  <tr className="border-b border-gray-200 dark:border-gray-800 text-gray-500 text-xs uppercase tracking-wider">
                     <th className="text-left px-4 py-2.5">Start</th>
                     <th className="text-left px-4 py-2.5">End</th>
                     <th className="text-right px-4 py-2.5">Duration</th>
@@ -273,7 +273,7 @@ export default function DeviceDetail({ equipmentId, clusterId, onBack }: Props) 
                   {data.sessions.slice(0, 100).map((s, i) => (
                     <tr
                       key={i}
-                      className="border-b border-gray-800/30 hover:bg-gray-800/20 transition-colors"
+                      className="border-b border-gray-200 dark:border-gray-800/30 hover:bg-gray-800/20 transition-colors"
                     >
                       <td className="px-4 py-2 text-gray-300 font-mono text-xs">
                         {new Date(s.start).toLocaleString(undefined, {

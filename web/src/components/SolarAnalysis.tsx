@@ -153,7 +153,7 @@ export default function SolarAnalysis({ data }: Props) {
     const breakevenMonths = netMonthlySavings > 0 ? 0 : Math.ceil(Math.abs(netAnnualSavings) / (annualSavingsFromSolar / 12))
 
     return (
-      <div className="bg-gray-900/50 border border-yellow-900/30 rounded-xl p-5">
+      <div className="bg-gray-50 dark:bg-gray-900/50 border border-yellow-900/30 rounded-xl p-5">
         <h3 className="text-xs font-medium text-yellow-400 uppercase tracking-wide mb-4">
           Solar Quote Analysis
         </h3>
