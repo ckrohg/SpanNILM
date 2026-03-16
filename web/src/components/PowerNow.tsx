@@ -374,7 +374,7 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                                   </span>
                                 )}
                                 {d.num_phases > 2 && (
-                                  <span className="text-gray-600">{d.num_phases}-phase</span>
+                                  <span className="text-gray-600">{d.num_phases} power stages</span>
                                 )}
                               </div>
                             )}

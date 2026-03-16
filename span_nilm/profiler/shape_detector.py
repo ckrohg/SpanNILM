@@ -514,9 +514,9 @@ class ShapeDetector:
                 location = loc.title() + " "
                 break
 
-        # Sub-panel with 3+ distinct phases = multiple overlapping devices
+        # Sub-panel with 3+ distinct power stages = multiple overlapping devices
         if is_sub_panel and num_phases >= 3:
-            return f"{location}Multiple loads ({num_phases} devices)"
+            return f"{location}Multi-stage load ({num_phases} levels)"
 
         # --- Shape-based naming (when circuit name isn't specific) ---
 
@@ -538,7 +538,7 @@ class ShapeDetector:
                 return f"{location}Cycling compressor"
             return f"{location}Cycling heavy load"
 
-        # Multi-phase = complex appliance cycle
+        # Multi-stage = complex appliance cycle with distinct power levels
         if num_phases >= 4:
             if avg_power > 2000:
                 return f"{location}Multi-stage heating"
