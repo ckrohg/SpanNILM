@@ -394,6 +394,7 @@ export interface MonthlyForecast {
   data_days: number
   hdd: number
   cdd: number
+  prior_year_kwh: number | null
 }
 
 export interface AnnualForecastData {

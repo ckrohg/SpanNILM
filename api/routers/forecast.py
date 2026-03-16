@@ -63,6 +63,7 @@ class MonthlyForecast(BaseModel):
     data_days: int  # how many days of actual data this month has
     hdd: float  # heating degree days
     cdd: float  # cooling degree days
+    prior_year_kwh: float | None = None  # last year's actual usage for this month
 
 
 class AnnualForecastResponse(BaseModel):
@@ -92,14 +93,23 @@ def _cdd(temp_f: float) -> float:
     return max(0.0, temp_f - 65.0)
 
 
-def _get_historical_monthly(property_id: str) -> dict[int, dict]:
-    """Return {month_number: {kwh, data_days, is_partial, raw_kwh}} from span_circuit_aggregations."""
+def _get_historical_monthly(property_id: str) -> tuple[dict[int, dict], dict[int, float]]:
+    """Return (current_year_data, prior_year_data) from span_circuit_aggregations.
+
+    current_year_data: {month: {kwh, data_days, is_partial, raw_kwh}}
+    prior_year_data: {month: kwh} — for showing last year's comparison
+    """
+    from datetime import datetime
+    current_year = datetime.now().year
+
     conn = _tempiq_db()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Get data grouped by year and month
             cur.execute(
                 """
                 SELECT
+                    EXTRACT(YEAR FROM bucket_start)::int AS year,
                     EXTRACT(MONTH FROM bucket_start)::int AS month,
                     SUM(energy_wh::float) / 1000.0 AS total_kwh,
                     MIN(bucket_start) AS first_bucket,
@@ -108,8 +118,8 @@ def _get_historical_monthly(property_id: str) -> dict[int, dict]:
                 FROM span_circuit_aggregations
                 WHERE property_id = %s
                   AND energy_wh IS NOT NULL
-                GROUP BY EXTRACT(MONTH FROM bucket_start)
-                ORDER BY month
+                GROUP BY EXTRACT(YEAR FROM bucket_start), EXTRACT(MONTH FROM bucket_start)
+                ORDER BY year, month
                 """,
                 (property_id,),
             )
@@ -117,8 +127,12 @@ def _get_historical_monthly(property_id: str) -> dict[int, dict]:
     finally:
         conn.close()
 
+    # Separate into current year and prior year(s)
     result: dict[int, dict] = {}
+    prior_year: dict[int, float] = {}
+
     for row in rows:
+        year = int(row["year"])
         month = int(row["month"])
         kwh = float(row["total_kwh"])
         raw_kwh = kwh
@@ -134,14 +148,25 @@ def _get_historical_monthly(property_id: str) -> dict[int, dict]:
                 kwh = kwh * (days_in_month / days_span)
                 is_partial = True
 
-        result[month] = {
-            "kwh": kwh,
-            "raw_kwh": raw_kwh,
-            "data_days": data_days,
-            "is_partial": is_partial,
-        }
+        # For the "current" data, use the most recent occurrence of each month
+        # (handles data spanning Nov 2025 - Mar 2026)
+        if month not in result or year >= result[month].get("_year", 0):
+            result[month] = {
+                "kwh": kwh,
+                "raw_kwh": raw_kwh,
+                "data_days": data_days,
+                "is_partial": is_partial,
+                "_year": year,
+            }
 
-    return result
+        # Prior year data: if we have the same month in an earlier year
+        if year < current_year:
+            prior_year[month] = kwh
+        elif year == current_year and month in result and result[month].get("_year", 0) < current_year:
+            # The "current" data is actually from last year — swap
+            prior_year[month] = result[month]["kwh"]
+
+    return result, prior_year
 
 
 def _get_settings() -> dict[str, str]:
@@ -157,6 +182,7 @@ def _get_settings() -> dict[str, str]:
 
 def _build_forecast(
     historical: dict[int, dict],
+    prior_year: dict[int, float],
     temps: list[float],
     rate: float,
     solar_annual_kwh: float,
@@ -280,6 +306,7 @@ def _build_forecast(
             data_days=data_days,
             hdd=round(hdd_val, 1),
             cdd=round(cdd_val, 1),
+            prior_year_kwh=round(prior_year.get(m, 0), 1) if prior_year.get(m) else None,
         ))
 
     return forecasts, methodology, regression_formula
@@ -295,8 +322,8 @@ def get_forecast() -> AnnualForecastResponse:
     property_id = _get_property_id()
 
     # Step 1: historical monthly energy
-    historical = _get_historical_monthly(property_id)
-    logger.info("Historical data for months: %s", sorted(historical.keys()))
+    historical, prior_year = _get_historical_monthly(property_id)
+    logger.info("Historical data for months: %s, prior year: %s", sorted(historical.keys()), sorted(prior_year.keys()))
 
     # Step 2: temperatures — use New England averages
     temps = [float(t) for t in NE_AVG_TEMPS]
@@ -311,7 +338,7 @@ def get_forecast() -> AnnualForecastResponse:
 
     # Step 4: build forecast
     months, methodology, regression_formula = _build_forecast(
-        historical, temps, rate,
+        historical, prior_year, temps, rate,
         solar_annual_kwh, solar_monthly_payment, net_metering,
     )
 

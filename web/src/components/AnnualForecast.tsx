@@ -57,6 +57,8 @@ export default function AnnualForecast() {
     solar: Math.round(m.solar_production_kwh),
     temp: m.avg_temp_f,
     isActual: m.is_actual,
+    priorYear: m.prior_year_kwh != null ? Math.round(m.prior_year_kwh) : null,
+    method: m.method,
   }))
 
   const actualCount = months.filter((m) => m.is_actual).length
@@ -132,13 +134,48 @@ export default function AnnualForecast() {
                 borderRadius: '8px',
                 fontSize: '12px',
               }}
-              formatter={(value: number, name: string) => {
-                if (name === 'usage') return [`${value.toLocaleString()} kWh`, 'Usage']
-                if (name === 'solar') return [`${value.toLocaleString()} kWh`, 'Solar']
-                if (name === 'temp') return [`${value}°F`, 'Avg Temp']
-                return [value, name]
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null
+                const entry = chartData.find((d) => d.name === label)
+                return (
+                  <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 text-xs shadow-xl">
+                    <div className="font-medium text-gray-200 mb-1.5">{label}</div>
+                    {payload.map((p, i) => (
+                      <div key={i} className="flex justify-between gap-4">
+                        <span style={{ color: p.color }}>
+                          {p.name === 'usage' ? 'Usage' : p.name === 'solar' ? 'Solar' : p.name === 'temp' ? 'Temp' : p.name}
+                        </span>
+                        <span className="font-mono text-gray-300">
+                          {p.name === 'temp' ? `${p.value}°F` : `${p.value?.toLocaleString()} kWh`}
+                        </span>
+                      </div>
+                    ))}
+                    {entry?.priorYear != null && (
+                      <div className="flex justify-between gap-4 mt-1.5 pt-1.5 border-t border-gray-700">
+                        <span className="text-gray-500">Last year</span>
+                        <span className="font-mono text-gray-400">
+                          {entry.priorYear.toLocaleString()} kWh
+                          {entry.usage > 0 && (
+                            <span className={entry.usage > entry.priorYear ? ' text-red-400' : ' text-green-400'}>
+                              {' '}({entry.usage > entry.priorYear ? '+' : ''}{Math.round((entry.usage - entry.priorYear) / entry.priorYear * 100)}%)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                    {!entry?.isActual && !entry?.priorYear && (
+                      <div className="mt-1.5 pt-1.5 border-t border-gray-700 text-gray-600 italic">
+                        No prior year data available
+                      </div>
+                    )}
+                    {!entry?.isActual && (
+                      <div className="mt-1 text-gray-600 italic">
+                        {entry?.method === 'degree_day_regression' ? 'Projected via degree-day model' : 'Estimated'}
+                      </div>
+                    )}
+                  </div>
+                )
               }}
-              labelStyle={{ color: '#9ca3af' }}
             />
             <Legend
               wrapperStyle={{ fontSize: '11px' }}
