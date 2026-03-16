@@ -94,18 +94,27 @@ def _cdd(temp_f: float) -> float:
 
 
 def _get_historical_monthly(property_id: str) -> tuple[dict[int, dict], dict[int, float]]:
-    """Return (current_year_data, prior_year_data) from span_circuit_aggregations.
+    """Return (current_data, prior_year_data) from span_circuit_aggregations.
 
-    current_year_data: {month: {kwh, data_days, is_partial, raw_kwh}}
-    prior_year_data: {month: kwh} — for showing last year's comparison
+    Data spans Nov 2025 - Mar 2026. We treat:
+    - "Current": the most recent occurrence of each month (for the forward-looking year)
+    - "Prior year": any earlier occurrence of the same month
+
+    For months where we have data from two different years (e.g., if we had Nov 2024 + Nov 2025),
+    the newer one is "current" and the older is "prior year."
+
+    Since we only have ~5 months of data starting Nov 2025, ALL months with data are "current"
+    and none have prior year data yet. But as data accumulates past 12 months, prior year
+    comparisons will appear automatically.
     """
     from datetime import datetime
-    current_year = datetime.now().year
+    now = datetime.now()
+    current_year = now.year
+    current_month = now.month
 
     conn = _tempiq_db()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # Get data grouped by year and month
             cur.execute(
                 """
                 SELECT
@@ -127,10 +136,8 @@ def _get_historical_monthly(property_id: str) -> tuple[dict[int, dict], dict[int
     finally:
         conn.close()
 
-    # Separate into current year and prior year(s)
-    result: dict[int, dict] = {}
-    prior_year: dict[int, float] = {}
-
+    # Collect all year-month entries
+    all_entries: dict[tuple[int, int], dict] = {}  # (year, month) -> data
     for row in rows:
         year = int(row["year"])
         month = int(row["month"])
@@ -148,23 +155,40 @@ def _get_historical_monthly(property_id: str) -> tuple[dict[int, dict], dict[int
                 kwh = kwh * (days_in_month / days_span)
                 is_partial = True
 
-        # For the "current" data, use the most recent occurrence of each month
-        # (handles data spanning Nov 2025 - Mar 2026)
-        if month not in result or year >= result[month].get("_year", 0):
-            result[month] = {
-                "kwh": kwh,
-                "raw_kwh": raw_kwh,
-                "data_days": data_days,
-                "is_partial": is_partial,
-                "_year": year,
-            }
+        all_entries[(year, month)] = {
+            "kwh": kwh,
+            "raw_kwh": raw_kwh,
+            "data_days": data_days,
+            "is_partial": is_partial,
+            "year": year,
+        }
 
-        # Prior year data: if we have the same month in an earlier year
-        if year < current_year:
-            prior_year[month] = kwh
-        elif year == current_year and month in result and result[month].get("_year", 0) < current_year:
-            # The "current" data is actually from last year — swap
-            prior_year[month] = result[month]["kwh"]
+    # For each month, find "current" (most recent) and "prior year" (one year earlier)
+    result: dict[int, dict] = {}
+    prior_year: dict[int, float] = {}
+
+    for month in range(1, 13):
+        # Find all years that have data for this month
+        years_with_data = sorted([y for (y, m) in all_entries if m == month], reverse=True)
+
+        if not years_with_data:
+            continue
+
+        # Most recent = current
+        newest_year = years_with_data[0]
+        entry = all_entries[(newest_year, month)]
+        result[month] = {
+            "kwh": entry["kwh"],
+            "raw_kwh": entry["raw_kwh"],
+            "data_days": entry["data_days"],
+            "is_partial": entry["is_partial"],
+            "_year": newest_year,
+        }
+
+        # If there's an older year, that's prior year
+        if len(years_with_data) > 1:
+            older_year = years_with_data[1]
+            prior_year[month] = all_entries[(older_year, month)]["kwh"]
 
     return result, prior_year
 
@@ -228,10 +252,25 @@ def _build_forecast(
 
         regression_formula = f"kWh = {a_hdd:.1f} × HDD + {b_cdd:.1f} × CDD + {c_base:.0f}"
 
+        # Compute trend adjustment: how much do actuals deviate from the model?
+        # If recent months are consistently higher/lower than predicted, adjust future months
+        residuals = []
+        for m, kwh, hdd, cdd, _, _ in actual_months:
+            predicted = a_hdd * hdd + b_cdd * cdd + c_base
+            if predicted > 0:
+                residuals.append(kwh / predicted)
+        trend_factor = float(np.median(residuals)) if residuals else 1.0
+        # Clamp to reasonable range (0.7 - 1.3)
+        trend_factor = max(0.7, min(1.3, trend_factor))
+
         def predict(month: int) -> float:
             t = temps[month - 1]
             est = a_hdd * _hdd(t) + b_cdd * _cdd(t) + c_base
+            est = est * trend_factor  # Apply trend adjustment
             return max(est, c_base * 0.5)
+
+        trend_pct = (trend_factor - 1.0) * 100
+        trend_str = f" Trend adjustment: {trend_pct:+.0f}% applied to projections based on recent actual vs predicted." if abs(trend_pct) > 2 else ""
 
         actual_month_names = [MONTH_NAMES[m - 1] for m, _, _, _, _, _ in actual_months]
         methodology = (
@@ -240,7 +279,8 @@ def _build_forecast(
             f"Formula: {regression_formula}. "
             f"HDD = heating degree days (base 65°F), CDD = cooling degree days. "
             f"Months without data are projected using this formula with average "
-            f"New England temperatures. Partial months are scaled proportionally."
+            f"New England temperatures, adjusted for recent consumption trends.{trend_str} "
+            f"Partial months are scaled proportionally."
         )
     else:
         total_kwh = sum(info["kwh"] for _, info in historical.items())
