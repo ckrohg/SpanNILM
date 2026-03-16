@@ -10,6 +10,7 @@ import CostBreakdown from './components/CostBreakdown'
 import WeeklyDigest from './components/WeeklyDigest'
 import EfficiencyScore from './components/EfficiencyScore'
 import SolarAnalysis from './components/SolarAnalysis'
+import LearnedDevices from './components/LearnedDevices'
 import AnnualForecast from './components/AnnualForecast'
 import Circuits from './pages/Circuits'
 import CircuitDetail from './pages/CircuitDetail'
@@ -276,9 +277,27 @@ export default function App() {
                   )}
                 </section>
 
+                {/* Always On + Efficiency + Weekly */}
+                <section>
+                  <h2 className="text-sm font-medium text-gray-400 mb-2">
+                    Always-On Loads
+                  </h2>
+                  <AlwaysOnCard
+                    alwaysOnW={dashboard.always_on_w}
+                    totalPowerW={dashboard.total_power_w}
+                    totalEnergyTodayKwh={dashboard.total_energy_today_kwh}
+                    circuits={dashboard.circuits}
+                    electricityRate={dashboard.electricity_rate}
+                  />
+                </section>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                  <EfficiencyScore data={dashboard} />
+                  <WeeklyDigest data={dashboard} />
+                </div>
+
                 {/* ═══════════════════════════════════════════
                     SECTION 2: CIRCUITS & DEVICES
-                    Per-circuit breakdown, always-on, efficiency
                     ═══════════════════════════════════════════ */}
 
                 <div className="border-t border-gray-800 pt-6 mt-2">
@@ -297,25 +316,8 @@ export default function App() {
                   />
                 </section>
 
-                {/* Always On */}
-                <section>
-                  <h2 className="text-sm font-medium text-gray-400 mb-2">
-                    Always-On Loads
-                  </h2>
-                  <AlwaysOnCard
-                    alwaysOnW={dashboard.always_on_w}
-                    totalPowerW={dashboard.total_power_w}
-                    totalEnergyTodayKwh={dashboard.total_energy_today_kwh}
-                    circuits={dashboard.circuits}
-                    electricityRate={dashboard.electricity_rate}
-                  />
-                </section>
-
-                {/* Efficiency Score + Weekly Digest */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                  <EfficiencyScore data={dashboard} />
-                  <WeeklyDigest data={dashboard} />
-                </div>
+                {/* Learned Devices — high confidence detections needing review */}
+                <LearnedDevices circuits={dashboard.circuits} />
 
                 {/* ═══════════════════════════════════════════
                     SECTION 3: SOLAR & FORECAST
