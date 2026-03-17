@@ -328,6 +328,38 @@ class SubpanelDecomposer:
             if best_cluster is not None and best_dist <= self.power_cluster_tolerance:
                 clusters[best_cluster].append(run)
 
+        # Merge clusters that are likely the same physical device at different
+        # operating levels (e.g., a mini-split modulating between 200W-1200W).
+        # Two clusters merge if:
+        # - Their power ranges overlap or are adjacent (gap < 50% of lower cluster center)
+        # - They have similar temporal patterns (>50% of runs in the same hours)
+        clusters = self._merge_modulating_device_clusters(clusters)
+        logger.info("After merging modulating devices: %d clusters", len(clusters))
+
+        # Limit to max ~6 devices per sub-panel (most sub-panels have 3-6 loads)
+        # Keep the clusters with the most total energy
+        if len(clusters) > 6:
+            cluster_energies = []
+            for cluster in clusters:
+                total_e = sum(r.energy_wh or 0 for r in cluster)
+                cluster_energies.append((total_e, cluster))
+            cluster_energies.sort(key=lambda x: x[0], reverse=True)
+            # Keep top 6 by energy, merge the rest into the closest cluster
+            top_clusters = [c for _, c in cluster_energies[:6]]
+            remaining = [c for _, c in cluster_energies[6:]]
+            for rem_cluster in remaining:
+                rem_center = float(np.median([r.power_w for r in rem_cluster]))
+                best_idx = 0
+                best_dist = float("inf")
+                for i, tc in enumerate(top_clusters):
+                    tc_center = float(np.median([r.power_w for r in tc]))
+                    dist = abs(rem_center - tc_center)
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_idx = i
+                top_clusters[best_idx].extend(rem_cluster)
+            clusters = top_clusters
+
         # Convert clusters to DecomposedDevice
         for cluster in clusters:
             powers = [r.power_w for r in cluster]
@@ -359,3 +391,62 @@ class SubpanelDecomposer:
         devices.sort(key=lambda d: d.total_energy_wh, reverse=True)
 
         return devices
+
+    def _merge_modulating_device_clusters(
+        self, clusters: list[list[ComponentRun]]
+    ) -> list[list[ComponentRun]]:
+        """Merge clusters that represent the same device at different power levels.
+
+        A modulating device (mini-split, variable-speed motor) produces step changes
+        at many power levels. The initial clustering creates separate groups for each
+        level. This method merges clusters that form a continuous power range and
+        share temporal patterns.
+
+        Merge criteria:
+        - Power gap between adjacent clusters is < 50% of lower cluster's median power
+        - OR clusters have overlapping peak hours (>= 2 shared top-3 hours)
+        """
+        if len(clusters) <= 1:
+            return clusters
+
+        # Sort clusters by median power
+        clusters_sorted = sorted(
+            clusters, key=lambda c: float(np.median([r.power_w for r in c]))
+        )
+
+        merged: list[list[ComponentRun]] = [clusters_sorted[0]]
+
+        for cluster in clusters_sorted[1:]:
+            prev_cluster = merged[-1]
+            prev_center = float(np.median([r.power_w for r in prev_cluster]))
+            curr_center = float(np.median([r.power_w for r in cluster]))
+
+            # Check power gap
+            gap = curr_center - prev_center
+            gap_ratio = gap / max(prev_center, 1)
+
+            # Check temporal overlap
+            prev_hours = set(r.start.hour for r in prev_cluster)
+            curr_hours = set(r.start.hour for r in cluster)
+            # Get top-5 hours for each
+            from collections import Counter
+            prev_top = set(h for h, _ in Counter(r.start.hour for r in prev_cluster).most_common(5))
+            curr_top = set(h for h, _ in Counter(r.start.hour for r in cluster).most_common(5))
+            shared_hours = len(prev_top & curr_top)
+
+            # Merge if power levels are close OR temporal patterns overlap
+            should_merge = (
+                gap_ratio < 0.5  # Power levels within 50% of each other
+                or shared_hours >= 2  # Share at least 2 peak hours
+            )
+
+            if should_merge:
+                merged[-1].extend(cluster)
+            else:
+                merged.append(cluster)
+
+        logger.debug(
+            "Merged %d initial clusters into %d device groups",
+            len(clusters_sorted), len(merged),
+        )
+        return merged
