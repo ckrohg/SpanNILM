@@ -297,22 +297,22 @@ class DedicatedLearner:
         """Compute prior probability for finding another instance of device_type.
 
         More dedicated circuits of this type already exist -> lower prior
-        for finding it again on a shared circuit.
+        for finding it again on a shared circuit. Aggressive suppression
+        to prevent the classifier from labeling everything as Heat Pump
+        just because heat pump sessions dominate the training data.
         """
         if device_type == UNKNOWN_CLASS:
-            return 1.0
+            return 1.0  # Always welcome unknown
 
         count = self.device_type_counts.get(device_type, 0)
         if count == 0:
-            return 0.8
+            return 0.5  # Device type not seen — moderate prior
         elif count == 1:
-            return 0.5
+            return 0.2  # One already — unlikely to find another
         elif count == 2:
-            return 0.3
-        elif count <= 4:
-            return 0.15
+            return 0.05  # Two already — very unlikely
         else:
-            return 0.1  # e.g., 5 heat pumps already
+            return 0.01  # 3+ already (e.g., 5 heat pumps) — effectively zero
 
     # ------------------------------------------------------------------
     # Model persistence

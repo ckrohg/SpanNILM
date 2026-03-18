@@ -677,26 +677,13 @@ class ShapeDetector:
         is_cycling: bool,
         circuit_name: str,
     ) -> str:
-        """Infer a descriptive device name from consumption profile.
+        """Infer a descriptive device name PURELY from energy consumption profile.
 
-        CONSUMPTION PROFILE IS PRIMARY. Circuit name is only used for
-        hydronic/zone pump circuits where the name definitively identifies
-        the device type. For all other circuits, naming is based purely on
-        power level, cycling pattern, duration, and startup behavior.
+        Circuit name is NEVER used for identification. The name comes entirely
+        from: power level, cycling pattern, duration, startup behavior, and
+        number of power stages.
         """
-        name_lower = circuit_name.lower()
-
-        # Only use circuit name for definitively-named circuits
-        if any(kw in name_lower for kw in ("hydronic", "zone pump", "glycol")):
-            if avg_power < 50:
-                return "Control board standby"
-            elif avg_power < 200:
-                return "Circulation pump"
-            else:
-                n_pumps = max(1, round(avg_power / 150))
-                return f"Circulation pump{'s' if n_pumps > 1 else ''} ({n_pumps}x)"
-
-        # --- ALL OTHER CIRCUITS: Name by consumption profile only ---
+        # --- NAME ENTIRELY BY ENERGY PROFILE ---
 
         # Brief events (< 5 min average)
         if avg_duration < 5:

@@ -763,10 +763,12 @@ class CircuitProfiler:
                         # Skip if this device type is already detected
                         if any(device_type.lower() in et for et in existing_types):
                             continue
-                        # Only add if meaningful contribution (>5% of circuit power)
+                        # Only add if meaningful: >10% of circuit power AND >50W absolute
                         circuit_mean = float(np.mean(circuit_power[circuit_power > 10]))
-                        if circuit_mean > 0 and pred["avg_power_w"] < circuit_mean * 0.05:
-                            continue
+                        if pred["avg_power_w"] < 50:
+                            continue  # Too low to be a real device detection
+                        if circuit_mean > 0 and pred["avg_power_w"] < circuit_mean * 0.10:
+                            continue  # Less than 10% of circuit — noise
 
                         # Create a DeviceTemplate for this seq2point detection
                         new_device = DeviceTemplate(

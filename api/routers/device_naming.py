@@ -178,9 +178,9 @@ STEP 2 — Use cycling pattern to narrow down:
 - Long sustained runs = resistive (heater, iron, dryer element)
 - Frequent short sessions (5-15 min) = human-triggered (hair dryer, microwave, coffee maker)
 
-STEP 3 — Only THEN consider the circuit location as a tiebreaker:
-- Circuit: "{circuit_name}"
-- Use location only to choose between equally-likely candidates
+STEP 3 — If two candidates are equally likely from power profile alone, you may consider
+that this device is in a residential home in New England. Do NOT use the circuit name
+to guess — focus only on what the power consumption pattern tells you.
 
 ALREADY IDENTIFIED (do NOT suggest these device types):
 {dedicated_info or "None"}
