@@ -140,15 +140,44 @@ class SubpanelDecomposer:
     def _detect_steps(
         self, power: np.ndarray, timestamps: pd.DatetimeIndex
     ) -> list[StepEvent]:
-        """Detect step changes between consecutive readings.
+        """Detect step changes using adaptive z-score thresholding.
 
-        For each pair of consecutive readings, if |delta| > threshold,
-        record a StepEvent.
+        Uses a rolling window (5 readings = 50 min at 10-min resolution) to
+        compute local mean and std. A step is detected when:
+          |power[i] - rolling_mean| > 3 * rolling_std  AND  |delta| > 20W floor
+
+        This adapts to each circuit's noise level: a quiet 50W circuit detects
+        30W changes, while a noisy 2000W circuit requires proportionally larger
+        changes. Falls back to the fixed threshold for the first few readings
+        before rolling statistics stabilize (window < 5 readings).
         """
+        ROLLING_WINDOW = 5   # readings (50 min at 10-min intervals)
+        Z_SCORE_THRESHOLD = 3.0
+        MIN_DELTA_FLOOR_W = 20.0  # absolute minimum change to register
+
         events = []
         for i in range(1, len(power)):
             delta = power[i] - power[i - 1]
-            if abs(delta) > self.step_threshold_w:
+            abs_delta = abs(delta)
+
+            if i < ROLLING_WINDOW:
+                # Not enough history for rolling stats — use fixed threshold
+                is_step = abs_delta > self.step_threshold_w
+            else:
+                # Compute rolling mean and std over the preceding window
+                window = power[max(0, i - ROLLING_WINDOW):i]
+                rolling_mean = float(np.mean(window))
+                rolling_std = float(np.std(window))
+
+                # Adaptive threshold: z-score deviation from rolling mean
+                deviation = abs(power[i] - rolling_mean)
+                adaptive_threshold = max(
+                    Z_SCORE_THRESHOLD * rolling_std,
+                    MIN_DELTA_FLOOR_W,
+                )
+                is_step = deviation > adaptive_threshold and abs_delta > MIN_DELTA_FLOOR_W
+
+            if is_step:
                 direction = "on" if delta > 0 else "off"
                 events.append(StepEvent(
                     timestamp=timestamps.iloc[i],

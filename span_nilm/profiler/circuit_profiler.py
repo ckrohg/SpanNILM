@@ -171,6 +171,9 @@ class CircuitProfiler:
         # Learn from dedicated circuits via Random Forest ML classifier
         self._learn_from_dedicated_ml(profiles, agg_df)
 
+        # Run Seq-to-Point disaggregation (complementary to shape detection)
+        self._run_seq2point(profiles, agg_df)
+
         # Run multi-dimensional signature matching on shared circuit devices
         self._run_signature_matching(profiles)
 
@@ -686,6 +689,139 @@ class CircuitProfiler:
 
         except Exception as e:
             logger.warning("DedicatedLearner failed (non-fatal): %s", e)
+
+    def _run_seq2point(
+        self, profiles: list[CircuitProfile], agg_df: pd.DataFrame
+    ):
+        """Run Seq-to-Point disaggregation on shared circuits.
+
+        Trains lightweight MLP models from dedicated circuit ground truth, then
+        predicts device contributions on each shared circuit. Adds new
+        DeviceTemplate entries for detected devices that shape detection missed.
+        """
+        from span_nilm.models.seq2point import Seq2PointModel, DeviceStateDetector
+
+        try:
+            # --- Train power estimator ---
+            s2p = Seq2PointModel(
+                source=self.source,
+                spannilm_db_url=self.db_url,
+                data_days=self.data_days,
+            )
+            s2p_result = s2p.train()
+            if "error" in s2p_result:
+                logger.warning("Seq2Point training failed: %s", s2p_result)
+            else:
+                s2p.save_model()
+                logger.info("Seq2Point trained: %s", s2p_result)
+
+            # --- Train state detector ---
+            state_det = DeviceStateDetector(
+                source=self.source,
+                spannilm_db_url=self.db_url,
+                data_days=self.data_days,
+            )
+            state_result = state_det.train()
+            if "error" in state_result:
+                logger.warning("DeviceStateDetector training failed: %s", state_result)
+            else:
+                state_det.save_model()
+                logger.info("DeviceStateDetector trained: %s", state_result)
+
+            # --- Apply predictions to shared circuits ---
+            if not s2p.models and not state_det.classifiers:
+                return
+
+            from span_nilm.profiler.shape_detector import DeviceTemplate
+
+            devices_added = 0
+            for profile in profiles:
+                if profile.is_dedicated:
+                    continue
+
+                # Get this circuit's power time series
+                circuit_data = agg_df[agg_df["circuit_id"] == profile.equipment_id]
+                if circuit_data.empty:
+                    continue
+                circuit_data = circuit_data.sort_values("timestamp").reset_index(drop=True)
+                circuit_power = circuit_data["power_w"].values.astype(np.float64)
+
+                if len(circuit_power) < 50:
+                    continue
+
+                # Collect existing device types already detected by shape/ML
+                existing_types = set()
+                if profile.shape_devices:
+                    for sd in profile.shape_devices:
+                        existing_types.add(sd.name.lower())
+
+                # --- Power estimation ---
+                if s2p.models:
+                    s2p_summary = s2p.predict_summary(circuit_power)
+                    for pred in s2p_summary:
+                        device_type = pred["device_type"]
+                        # Skip if this device type is already detected
+                        if any(device_type.lower() in et for et in existing_types):
+                            continue
+                        # Only add if meaningful contribution (>5% of circuit power)
+                        circuit_mean = float(np.mean(circuit_power[circuit_power > 10]))
+                        if circuit_mean > 0 and pred["avg_power_w"] < circuit_mean * 0.05:
+                            continue
+
+                        # Create a DeviceTemplate for this seq2point detection
+                        new_device = DeviceTemplate(
+                            cluster_id=900 + devices_added,  # High IDs to avoid collision
+                            name=f"{device_type} (seq2point)",
+                            template_curve=[0.8] * 32,
+                            avg_power_w=pred["avg_power_w"],
+                            peak_power_w=pred["peak_power_w"],
+                            min_power_w=0.0,
+                            avg_duration_min=0.0,
+                            std_duration_min=0.0,
+                            session_count=pred["on_readings"],
+                            sessions_per_day=0.0,
+                            peak_hours=[],
+                            confidence=round(min(0.6, pred["on_fraction"] * 2), 2),
+                            num_phases=1,
+                            has_startup_surge=False,
+                            is_cycling=False,
+                            duty_cycle=pred["on_fraction"],
+                            ramp_up_rate=0.0,
+                            energy_per_session_wh=pred["total_energy_wh"],
+                        )
+                        if profile.shape_devices is None:
+                            profile.shape_devices = []
+                        profile.shape_devices.append(new_device)
+                        devices_added += 1
+                        logger.info(
+                            "Seq2Point added %s on %s (%.0fW, %.1f%% on)",
+                            device_type, profile.circuit_name,
+                            pred["avg_power_w"], pred["on_fraction"] * 100,
+                        )
+
+                # --- State detection (augment confidence of existing devices) ---
+                if state_det.classifiers:
+                    state_summary = state_det.predict_state_summary(circuit_power)
+                    for state_pred in state_summary:
+                        device_type = state_pred["device_type"]
+                        # Boost confidence of matching shape devices
+                        if profile.shape_devices:
+                            for sd in profile.shape_devices:
+                                if device_type.lower() in sd.name.lower():
+                                    old_conf = sd.confidence
+                                    sd.confidence = min(
+                                        1.0,
+                                        sd.confidence + 0.1 * state_pred["confidence"],
+                                    )
+                                    logger.debug(
+                                        "State detector boosted %s confidence %.2f -> %.2f",
+                                        sd.name, old_conf, sd.confidence,
+                                    )
+
+            logger.info("Seq2Point added %d new device detections", devices_added)
+
+        except Exception as e:
+            logger.warning("Seq2Point disaggregation failed (non-fatal): %s", e)
 
     def _run_signature_matching(self, profiles: list[CircuitProfile]):
         """Run multi-dimensional signature matching on shared circuit devices.

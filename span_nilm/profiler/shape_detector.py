@@ -302,11 +302,20 @@ class ShapeDetector:
         - Energy: log energy per session (separates short vs long runs at same power)
         - Time-of-use: 24-bin hour histogram, weekend/weekday ratio
           (built from ALL sessions, appended per-session as context features)
+        - Fourier: top-3 FFT magnitudes + dominant frequency index (4 values)
+        - Startup: one-hot startup type (4) + overshoot + rise time (6 values)
 
         Returns (feature_matrix, valid_sessions) — sessions with valid features.
         """
+        from span_nilm.profiler.startup_analyzer import StartupAnalyzer
+
         features_list = []
         valid_sessions = []
+
+        # --- Pre-compute startup analysis across all sessions ---
+        startup_analyzer = StartupAnalyzer()
+        startup_result = startup_analyzer.analyze_startup(sessions)
+        startup_features_shared = startup_analyzer.get_feature_vector(startup_result)
 
         # --- Pre-compute time-of-use distributions across all sessions (#2) ---
         hour_histogram = np.zeros(24)
@@ -431,6 +440,30 @@ class ShapeDetector:
                 np.array([weekend_weekday_ratio]),  # 1 value
             ])  # 25 values
 
+            # --- Fourier / frequency domain features ---
+            # FFT of the normalized curve reveals cycling and multi-phase patterns
+            fft_vals = np.abs(np.fft.rfft(curve))
+            # Exclude DC component (index 0), take magnitudes of remaining
+            fft_no_dc = fft_vals[1:]
+            if len(fft_no_dc) >= 3:
+                # Top-3 frequency magnitudes (sorted descending)
+                top3_indices = np.argsort(fft_no_dc)[-3:][::-1]
+                top3_magnitudes = fft_no_dc[top3_indices]
+                # Dominant frequency index (1-based, which harmonic is strongest)
+                dominant_freq_idx = float(top3_indices[0] + 1)
+            else:
+                top3_magnitudes = np.zeros(3)
+                dominant_freq_idx = 0.0
+            fourier_features = np.concatenate([
+                top3_magnitudes,                    # 3 values
+                np.array([dominant_freq_idx]),       # 1 value
+            ])  # 4 values total
+
+            # --- Startup transient features ---
+            # Shared across all sessions on this circuit (startup type is a
+            # circuit-level characteristic, not per-session)
+            # 6 values: 4 one-hot startup type + overshoot + rise_time
+
             # Combine all features
             feature_vec = np.concatenate([
                 shape_features * 2.0,       # 32 values, weighted 2x
@@ -440,6 +473,8 @@ class ShapeDetector:
                 transition_features * 1.5,   # 7 values, weighted 1.5x (distinctive)
                 energy_features * 1.5,       # 1 value, weighted 1.5x
                 tou_features * 0.5,          # 25 values, weighted 0.5x (context, not per-session)
+                fourier_features * 1.0,      # 4 values, weighted 1.0x
+                startup_features_shared * 1.0,  # 6 values, weighted 1.0x
             ])
 
             features_list.append(feature_vec)
