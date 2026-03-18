@@ -49,6 +49,8 @@ export default function LearnedDevices({ circuits }: Props) {
       // Skip already confirmed, suppressed, or very low confidence
       if (d.user_confirmed) continue
       if (d.name.includes('[SUPPRESSED]') || d.name === 'Not a real device' || d.name === 'Unidentified device') continue
+      // Skip histogram-state devices (no template curve = not real shape detection)
+      if (!d.template_curve || d.template_curve.length === 0) continue
       allDevices.push({ device: d, circuit, deviceIndex: i })
     }
   }

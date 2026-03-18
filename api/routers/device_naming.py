@@ -164,17 +164,25 @@ Power curve shape (normalized 0-1, 32 points across session):
 
 Correlated circuits (activate at same time): {corr_str}
 
-GUIDELINES:
-- Do NOT suggest HVAC/heat pump/compressor if those are already on dedicated circuits above
-- For sub-panel circuits, think about what's in that area: basement (sump pump, dehumidifier, workshop tools, server/network equipment, chest freezer), barn (heaters, lighting, tools, water trough heater), 2nd floor (space heater, bathroom fan, entertainment system), garage (door opener, charger, fridge)
-- Consider common household devices: space heaters, dehumidifiers, chest freezers, sump pumps, bathroom exhaust fans, entertainment centers, computers/servers, aquariums, pool equipment, hot tubs
-- 10-100W sustained: electronics, fans, chargers, LED lighting, network equipment
-- 100-500W: small motors, dehumidifiers, bathroom fans, computer equipment
-- 500-1500W: space heaters, chest freezers (cycling), power tools, kitchen appliances
-- 1500-3000W: large heaters, shop equipment, large motors
+CRITICAL RULES:
+1. The power level MUST match the device type. Do NOT suggest:
+   - "Space heater" for anything under 500W (space heaters are 750-1500W)
+   - "Heater" or "Space heater" for loads under 200W — those are electronics, fans, or lights
+   - Any heating device for loads under 100W — those are chargers, standby, LED lighting, or electronics
+2. Do NOT suggest HVAC/heat pump/compressor — those are already on dedicated circuits listed above
+3. Do NOT repeat the same device type already detected on this circuit — each device should be unique
+4. Match the power level carefully:
+   - Under 20W: charger, standby power, LED indicator, smart plug, WiFi router
+   - 20-75W: LED lighting, ceiling fan, small electronics, phone/laptop charger, modem/router
+   - 75-200W: computer monitor, desktop computer, entertainment system, bathroom exhaust fan, ceiling fan on high
+   - 200-500W: dehumidifier, chest freezer compressor, computer + monitors, power tools (idle)
+   - 500-1000W: sump pump, large dehumidifier, power tools (active), hair dryer (low)
+   - 1000-1500W: space heater, hair dryer (high), vacuum, iron, stock tank heater
+   - 1500-3000W: large space heater, workshop equipment, kiln, large motor
+5. The circuit name tells you the LOCATION — suggest devices appropriate for that location
 
-Return ONLY a JSON array of 2-3 objects with "name" and "reasoning" fields. Be specific about the device, not generic categories.
-Example: [{{"name": "Basement Dehumidifier", "reasoning": "580W cycling pattern with 30-min on/off matches a dehumidifier compressor"}}]"""
+Return ONLY a JSON array of 2-3 objects with "name" and "reasoning" fields. Each suggestion must be a DIFFERENT type of device. Be specific.
+Example: [{{"name": "Chest Freezer Compressor", "reasoning": "87W cycling pattern with 277min average sessions matches a chest freezer compressor cycle"}}]"""
 
 
 def _parse_claude_suggestions(response_text: str) -> list[dict]:
