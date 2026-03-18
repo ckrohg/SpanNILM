@@ -7,6 +7,12 @@ function formatPower(w: number): string {
   return `${Math.round(w)} W`
 }
 
+function formatDuration(min: number): string {
+  if (min >= 1440) return `${(min / 1440).toFixed(1)} days`
+  if (min >= 60) return `${(min / 60).toFixed(1)}h`
+  return `${Math.round(min)}min`
+}
+
 function MiniSparkline({ curve }: { curve: number[] }) {
   const w = 60
   const h = 16
@@ -36,6 +42,7 @@ interface Props {
 
 export default function LearnedDevices({ circuits }: Props) {
   const [confirming, setConfirming] = useState<string | null>(null)
+  const [expandedDetail, setExpandedDetail] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<Record<string, DeviceSuggestion[]>>({})
   const [loadingSuggestions, setLoadingSuggestions] = useState<string | null>(null)
   const [confirmed, setConfirmed] = useState<Set<string>>(new Set())
@@ -117,39 +124,116 @@ export default function LearnedDevices({ circuits }: Props) {
       )
     }
 
+    const isDetailExpanded = expandedDetail === key
+    const d = item.device
+    const energyPerDay = d.session_count > 0 && d.avg_duration_min > 0
+      ? (d.power_w * d.avg_duration_min / 60) * (d.session_count / 30) / 1000 // rough kWh/day from 30 days
+      : 0
+    const costPerMonth = energyPerDay * 30 * (circuits[0]?.cost_today / Math.max(circuits[0]?.energy_today_kwh || 1, 0.01) || 0.34)
+
     return (
       <div key={key} className="rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800/50 overflow-hidden">
-        <div className="flex items-center gap-3 px-3 py-2.5">
-          {item.device.template_curve && item.device.template_curve.length > 0 && (
-            <MiniSparkline curve={item.device.template_curve} />
+        {/* Header — clickable for detail */}
+        <div
+          className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/30 transition-colors"
+          onClick={() => setExpandedDetail(isDetailExpanded ? null : key)}
+        >
+          {d.template_curve && d.template_curve.length > 0 && (
+            <MiniSparkline curve={d.template_curve} />
           )}
           <div className="flex-1 min-w-0">
-            <div className="text-sm text-gray-800 dark:text-gray-200 font-medium">{item.device.name}</div>
+            <div className="text-sm text-gray-800 dark:text-gray-200 font-medium">{d.name}</div>
             <div className="text-[10px] text-gray-500">
-              {item.circuit.name} · ~{formatPower(item.device.power_w)} · {item.device.session_count} sessions · {Math.round(item.device.confidence * 100)}% confidence
+              {item.circuit.name} · ~{formatPower(d.power_w)} · {d.session_count} sessions · {Math.round(d.confidence * 100)}% confidence
             </div>
           </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <button
-              onClick={() => handleConfirm(item)}
-              className="px-2.5 py-1 text-[11px] rounded bg-green-900/40 text-green-400 border border-green-800/50 hover:bg-green-800/50 transition-colors"
-            >
-              ✓ Yes, correct
-            </button>
-            <button
-              onClick={() => setConfirming(isConfirmingThis ? null : key)}
-              className="px-2.5 py-1 text-[11px] rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-800/50 hover:bg-yellow-200 dark:hover:bg-yellow-800/40 transition-colors"
-            >
-              Not quite right
-            </button>
-            <button
-              onClick={() => handleSelectSuggestion(item, '[SUPPRESSED] I don\'t have this')}
-              className="px-2.5 py-1 text-[11px] rounded bg-gray-100 dark:bg-gray-800/50 text-gray-500 border border-gray-300 dark:border-gray-700/50 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-            >
-              Don't have this
-            </button>
-          </div>
+          <svg className={`w-4 h-4 text-gray-500 transition-transform flex-shrink-0 ${isDetailExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
         </div>
+
+        {/* Expanded consumption profile */}
+        {isDetailExpanded && (
+          <div className="border-t border-gray-200 dark:border-gray-800/50 px-3 py-3 bg-gray-100/50 dark:bg-gray-950/30">
+            {/* Key stats grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+              <div>
+                <div className="text-[9px] text-gray-500 uppercase">Avg Power</div>
+                <div className="text-sm font-mono text-gray-800 dark:text-gray-200">{formatPower(d.power_w)}</div>
+              </div>
+              <div>
+                <div className="text-[9px] text-gray-500 uppercase">Sessions</div>
+                <div className="text-sm font-mono text-gray-800 dark:text-gray-200">{d.session_count} total</div>
+              </div>
+              <div>
+                <div className="text-[9px] text-gray-500 uppercase">Avg Duration</div>
+                <div className="text-sm font-mono text-gray-800 dark:text-gray-200">{formatDuration(d.avg_duration_min)}</div>
+              </div>
+              <div>
+                <div className="text-[9px] text-gray-500 uppercase">Energy/Session</div>
+                <div className="text-sm font-mono text-gray-800 dark:text-gray-200">{d.energy_per_session_wh.toFixed(0)} Wh</div>
+              </div>
+            </div>
+
+            {/* Behavioral characteristics */}
+            <div className="flex flex-wrap gap-2 mb-3">
+              {d.is_cycling && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800/40">
+                  Cycling pattern
+                </span>
+              )}
+              {d.num_phases > 2 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-800/40">
+                  {d.num_phases} power stages
+                </span>
+              )}
+              {d.power_w < 50 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+                  Low power / standby
+                </span>
+              )}
+              {d.avg_duration_min > 120 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800/40">
+                  Long-running ({formatDuration(d.avg_duration_min)} avg)
+                </span>
+              )}
+              {d.avg_duration_min < 10 && d.avg_duration_min > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-800/40">
+                  Brief bursts ({formatDuration(d.avg_duration_min)})
+                </span>
+              )}
+            </div>
+
+            {/* Estimated cost impact */}
+            {energyPerDay > 0.01 && (
+              <div className="text-[10px] text-gray-500 mb-3">
+                Est. ~{energyPerDay.toFixed(1)} kWh/day · ~{(energyPerDay * 30).toFixed(0)} kWh/month · ~${costPerMonth.toFixed(1)}/month
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleConfirm(item) }}
+                className="px-2.5 py-1 text-[11px] rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-800/50 hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors"
+              >
+                ✓ Yes, correct
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setConfirming(isConfirmingThis ? null : key) }}
+                className="px-2.5 py-1 text-[11px] rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-800/50 hover:bg-yellow-200 dark:hover:bg-yellow-800/40 transition-colors"
+              >
+                Not quite right
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleSelectSuggestion(item, '[SUPPRESSED] I don\'t have this') }}
+                className="px-2.5 py-1 text-[11px] rounded bg-gray-100 dark:bg-gray-800/50 text-gray-500 border border-gray-300 dark:border-gray-700/50 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+              >
+                Don't have this
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Rename / suggestions panel */}
         {isConfirmingThis && (
