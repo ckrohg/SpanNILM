@@ -673,13 +673,14 @@ class CircuitProfiler:
                         continue
 
                     if top_type != "unknown" and top_prob > 0.7:
-                        old_name = device.name
-                        device.name = f"{top_type} (ML matched)"
-                        device.confidence = min(1.0, device.confidence + 0.15)
+                        # ML match found — boost confidence but DO NOT rename.
+                        # The shape detector's consumption-profile name is better
+                        # than the ML classifier which is biased by training data.
+                        device.confidence = min(1.0, device.confidence + 0.10)
                         matches_found += 1
                         logger.info(
-                            "ML match on %s: '%s' -> '%s' (prob=%.0f%%)",
-                            profile.circuit_name, old_name, device.name,
+                            "ML match on %s: '%s' matches '%s' (prob=%.0f%%) — confidence boosted",
+                            profile.circuit_name, device.name, top_type,
                             top_prob * 100,
                         )
 
