@@ -113,22 +113,26 @@ class LLMAnalyzer:
                 parts.append(f"  - {dt} ({prob:.0%})")
             ml_str = "\n".join(parts)
 
-        prompt = f"""You are identifying a device on residential circuit "{circuit_name}".
+        prompt = f"""Identify this device from its power consumption profile ONLY. Do NOT use the circuit name for identification.
 
-DEVICE MEASUREMENTS:
+POWER CONSUMPTION PROFILE:
 - Average power: {avg_power:.0f}W, Peak: {peak_power:.0f}W
-- Duration: {duration:.1f} min, Sessions/day: {sessions_per_day:.1f}
-- Power phases: {num_phases}, Startup surge: {has_surge}
+- Duration: {duration:.1f} min avg, Sessions/day: {sessions_per_day:.1f}
+- Power stages: {num_phases}, Startup surge: {has_surge}
 - Peak hours: {peak_hours}
-- Power curve (ASCII): |{sparkline}|
+- Power curve shape: |{sparkline}|
 
-SIGNATURE MATCHER top-3:
-{sig_str}
+CANDIDATE IDENTIFICATIONS:
+From signature matching: {sig_str}
+From ML classifier: {ml_str}
 
-ML CLASSIFIER top-3:
-{ml_str}
+RULES:
+- Identify PURELY from the power profile above. What device draws {avg_power:.0f}W with this pattern?
+- Do NOT use circuit name or location. A 45W cycling load is the same device regardless of where it is.
+- Under 100W cycling = small compressor or electronics. NOT a pump or heater.
+- 100-300W cycling = dehumidifier, freezer, or fan. NOT a heater unless >500W.
 
-Pick the single best identification. If neither set of candidates is convincing, suggest a new one.
+Pick the single best identification or suggest a better one.
 Return ONLY a JSON object: {{"name": "...", "confidence": 0.0-1.0, "reasoning": "..."}}"""
 
         try:
