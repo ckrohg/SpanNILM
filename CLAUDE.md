@@ -79,11 +79,13 @@ span_nilm/
     tempiq_source.py          # TempIQ queries: get_aggregated_power(), get_readings(), etc.
   profiler/
     circuit_profiler.py       # Orchestrator: all detection stages
-    shape_detector.py         # HDBSCAN on 76-dim features + sub-panel pathway
+    shape_detector.py         # HDBSCAN on 86-dim features (shape+amplitude+temporal+transition+energy+TOU+Fourier+startup)
     temporal_analyzer.py      # Session extraction, cycling, correlations
-    subpanel_decomposer.py    # Step-change decomposition for sub-panel circuits
+    subpanel_decomposer.py    # Z-score adaptive step-change decomposition for sub-panels
+    startup_analyzer.py       # Startup transient fingerprinting (instant/ramp/surge/oscillating)
     llm_analyzer.py           # 3-mode Claude analysis (device/circuit/home)
   models/
+    seq2point.py              # MLP seq-to-point power estimation + binary state detection
     signature_matcher.py      # Multi-dimensional matching (50+ signatures, context-aware)
     dedicated_learner.py      # Random Forest from dedicated circuit training data
     signatures.py             # Legacy signature matching
@@ -131,9 +133,15 @@ web/src/
 3. **For all circuits**: Shape-based session clustering (`shape_detector.py`)
    - Extract ON sessions (power > 8W threshold), or use decomposed components for sub-panels
    - Normalize power curves to 32 points
-   - Extract 76-dim feature vector: shape(32) + amplitude(4) + temporal(3) + pattern(4) + transition(7) + energy(1) + time-of-use(25)
+   - Extract **86-dim feature vector**: shape(32) + amplitude(4) + temporal(3) + pattern(4) + transition(7) + energy(1) + time-of-use(25) + **Fourier/FFT(4)** + **startup transient(6)**
+   - Fourier features: top-3 frequency magnitudes + dominant frequency from FFT of power curve
+   - Startup features: type (instant/ramp/surge/oscillating one-hot) + overshoot% + rise_time
    - HDBSCAN clustering (adaptive params by data volume)
    - Characterize clusters: template curve, stats, phase count
+3b. **Seq-to-point power estimation** (`seq2point.py`)
+   - MLPRegressor trained on dedicated circuits: sliding 31-reading window → device power at midpoint
+   - Finds devices on shared circuits that shape clustering misses
+   - Binary state detection: MLPClassifier determines if known device types are ON/OFF
 4. **Multi-dimensional signature matching** (`signature_matcher.py`)
    - 50+ device signatures with location context, seasonal patterns, cycling characteristics
    - Scoring: power(30%) + duration(15%) + cycling(15%) + location(15%) + time-of-day(10%) + seasonal(10%) + stability(5%)
