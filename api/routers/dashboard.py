@@ -13,6 +13,7 @@ from fastapi import APIRouter, Query
 
 from api.deps import get_tempiq_source
 from api.models import (
+    Anomaly,
     BillProjection,
     CircuitPower,
     CorrelationInfo,
@@ -620,6 +621,28 @@ def get_dashboard(
         is_weekday_now = now_eastern.weekday() < 5
         current_tou_rate, current_tou_period_name = _get_tou_rate(hour_now, is_weekday_now, tou, electricity_rate)
 
+    # 11. Anomaly detection (cached for 5 minutes)
+    dashboard_anomalies: list[Anomaly] = []
+    try:
+        from span_nilm.profiler.anomaly_detector import AnomalyDetector as _AnomalyDetector
+        detector = _AnomalyDetector(electricity_rate=electricity_rate)
+        raw_anomalies = detector.detect(source, days_history=30)
+        dashboard_anomalies = [
+            Anomaly(
+                circuit_name=a.circuit_name,
+                anomaly_type=a.anomaly_type,
+                severity=a.severity,
+                title=a.title,
+                description=a.description,
+                value=a.value,
+                expected=a.expected,
+                timestamp=a.timestamp,
+            )
+            for a in raw_anomalies
+        ]
+    except Exception as e:
+        logger.debug("Anomaly detection failed (non-fatal): %s", e)
+
     return DashboardResponse(
         total_power_w=round(total_power_w, 1),
         always_on_w=round(total_always_on_w, 1),
@@ -639,4 +662,5 @@ def get_dashboard(
         tou_schedule=tou if tou.enabled else None,
         current_tou_rate=current_tou_rate,
         current_tou_period_name=current_tou_period_name,
+        anomalies=dashboard_anomalies,
     )

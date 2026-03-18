@@ -11,6 +11,7 @@ import WeeklyDigest from './components/WeeklyDigest'
 import EfficiencyScore from './components/EfficiencyScore'
 import SolarAnalysis from './components/SolarAnalysis'
 import LearnedDevices from './components/LearnedDevices'
+import Anomalies from './components/Anomalies'
 import AnnualForecast from './components/AnnualForecast'
 import Circuits from './pages/Circuits'
 import CircuitDetail from './pages/CircuitDetail'
@@ -267,6 +268,11 @@ export default function App() {
                     alwaysOnW={dashboard.always_on_w}
                   />
                 </section>
+
+                {/* Anomalies */}
+                {dashboard.anomalies && dashboard.anomalies.length > 0 && (
+                  <Anomalies anomalies={dashboard.anomalies} />
+                )}
 
                 {/* Bill projection + Usage trends */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">

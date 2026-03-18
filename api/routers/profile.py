@@ -73,6 +73,53 @@ def run_profile(
     }
 
 
+@router.post("/profile/cron")
+def run_profile_cron():
+    """Cron endpoint for weekly profiler + auto-naming.
+
+    Call via Railway cron or external scheduler.
+    Runs the full profiler (30 days) then auto-names new devices.
+    Returns a summary.
+    """
+    errors: list[str] = []
+    profiles_saved = 0
+    named_count = 0
+
+    # Step 1: Run profiler with 30 days of data
+    try:
+        source = get_tempiq_source()
+        profiler = CircuitProfiler(
+            source=source,
+            spannilm_db_url=os.environ["SPANNILM_DATABASE_URL"],
+            data_days=30,
+        )
+        profiles = profiler.profile_all()
+        profiles_saved = profiler.save_profiles(profiles)
+        logger.info("Cron: saved %d circuit profiles", profiles_saved)
+    except Exception as e:
+        logger.error("Cron: profiler failed: %s", e)
+        errors.append(f"profiler: {e}")
+
+    # Step 2: Auto-name unnamed devices
+    try:
+        auto_result = auto_name_all_devices()
+        named_count = auto_result.get("named", 0)
+        auto_errors = auto_result.get("errors", [])
+        if auto_errors:
+            errors.extend(auto_errors)
+        logger.info("Cron: auto-named %d devices", named_count)
+    except Exception as e:
+        logger.error("Cron: auto-naming failed: %s", e)
+        errors.append(f"auto-naming: {e}")
+
+    return {
+        "status": "ok" if not errors else "partial",
+        "profiles_saved": profiles_saved,
+        "devices_named": named_count,
+        "errors": errors[:20],
+    }
+
+
 @router.get("/profile")
 def get_profiles():
     """Retrieve stored circuit profiles with temporal data."""

@@ -221,6 +221,7 @@ export interface DashboardData {
   tou_schedule: TOUSchedule | null
   current_tou_rate: number | null
   current_tou_period_name: string | null
+  anomalies: Anomaly[]
 }
 
 export interface DailyEnergy {
@@ -230,11 +231,14 @@ export interface DailyEnergy {
 }
 
 export interface Anomaly {
-  timestamp: string
-  description: string
+  circuit_name: string
+  anomaly_type: string
   severity: 'info' | 'warning' | 'alert'
+  title: string
+  description: string
   value: number
   expected: number
+  timestamp: string
 }
 
 export interface CircuitDetailData {

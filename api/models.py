@@ -175,6 +175,23 @@ class TOUSchedule(BaseModel):
     mid_peak: TOUPeriod | None = None
 
 
+class DailyEnergy(BaseModel):
+    date: str
+    energy_kwh: float
+    cost: float
+
+
+class Anomaly(BaseModel):
+    circuit_name: str = ""
+    anomaly_type: str = ""  # 'high_energy', 'extended_run', 'baseline_shift', 'missing_device', 'cost_spike'
+    severity: str = "info"  # info, warning, alert
+    title: str = ""
+    description: str = ""
+    value: float = 0.0
+    expected: float = 0.0
+    timestamp: str = ""
+
+
 class DashboardResponse(BaseModel):
     total_power_w: float
     always_on_w: float
@@ -194,20 +211,7 @@ class DashboardResponse(BaseModel):
     tou_schedule: TOUSchedule | None = None
     current_tou_rate: float | None = None
     current_tou_period_name: str | None = None
-
-
-class DailyEnergy(BaseModel):
-    date: str
-    energy_kwh: float
-    cost: float
-
-
-class Anomaly(BaseModel):
-    timestamp: str
-    description: str
-    severity: str  # info, warning, alert
-    value: float
-    expected: float
+    anomalies: list[Anomaly] = []
 
 
 class CircuitDetailResponse(BaseModel):
