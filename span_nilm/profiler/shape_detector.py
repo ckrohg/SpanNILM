@@ -677,120 +677,94 @@ class ShapeDetector:
         is_cycling: bool,
         circuit_name: str,
     ) -> str:
-        """Infer a descriptive device name from shape + circuit context.
+        """Infer a descriptive device name from consumption profile.
 
-        Uses circuit name keywords, power characteristics, temporal patterns,
-        and shape features to produce the best possible device name.
+        CONSUMPTION PROFILE IS PRIMARY. Circuit name is only used for
+        hydronic/zone pump circuits where the name definitively identifies
+        the device type. For all other circuits, naming is based purely on
+        power level, cycling pattern, duration, and startup behavior.
         """
         name_lower = circuit_name.lower()
 
-        # --- Circuit-context-aware naming ---
-
-        # Hydronic/pump circuits
+        # Only use circuit name for definitively-named circuits
         if any(kw in name_lower for kw in ("hydronic", "zone pump", "glycol")):
             if avg_power < 50:
-                return "Hydronic controller"
+                return "Control board standby"
             elif avg_power < 200:
                 return "Circulation pump"
             else:
                 n_pumps = max(1, round(avg_power / 150))
-                return f"Zone pump{'s' if n_pumps > 1 else ''} ({n_pumps}x)"
+                return f"Circulation pump{'s' if n_pumps > 1 else ''} ({n_pumps}x)"
 
-        # Garage door
-        if "garage" in name_lower:
-            if avg_duration < 3 and avg_power > 200:
-                return "Garage door motor"
-            elif avg_power < 50:
-                return "Garage standby"
-            elif avg_power < 200:
-                return "Garage light/outlet"
-            return "Garage equipment"
+        # --- ALL OTHER CIRCUITS: Name by consumption profile only ---
 
-        # Lighting circuits
-        if any(kw in name_lower for kw in ("light", "outlet")):
-            if avg_power < 30:
-                return "Standby/phantom load"
-            elif avg_power < 100:
-                return "LED lighting"
-            elif avg_power < 300:
-                return "Lighting + small appliance"
-            elif avg_power < 800:
-                return "Outlet appliance"
-            return "High-power outlet load"
-
-        # Sub-panel circuits — use shape characteristics
-        is_sub_panel = any(kw in name_lower for kw in ("sub panel", "subpanel", "sub-panel"))
-        location = ""
-        for loc in ("barn", "basement", "2nd floor", "upstairs"):
-            if loc in name_lower:
-                location = loc.title() + " "
-                break
-
-        # Sub-panel with 3+ distinct power stages = multiple overlapping devices
-        if is_sub_panel and num_phases >= 3:
-            return f"{location}Multi-stage load ({num_phases} levels)"
-
-        # --- Shape-based naming (when circuit name isn't specific) ---
-
-        # Brief events
+        # Brief events (< 5 min average)
         if avg_duration < 5:
-            if avg_power > 3000:
-                return f"{location}High-power burst"
-            elif avg_power > 500:
-                return f"{location}Motor/compressor start"
-            return f"{location}Brief load ({avg_power:.0f}W)"
+            if avg_power > 1000:
+                return "Brief high-power load"
+            elif avg_power > 200:
+                return "Motor/actuator"
+            return f"Brief load ({avg_power:.0f}W)"
 
-        # Cycling devices
+        # Cycling devices — the pattern is the key identifier
         if is_cycling:
             if avg_power < 50:
-                return f"{location}Cycling controller"
-            elif avg_power < 300:
-                return f"{location}Cycling fan/pump"
+                return "Cycling electronics"
+            elif avg_power < 150:
+                return "Small compressor (fridge/freezer)"
+            elif avg_power < 400:
+                return "Compressor (dehumidifier/freezer)"
+            elif avg_power < 1000:
+                return "Large compressor or pump"
             elif avg_power < 1500:
-                return f"{location}Cycling compressor"
-            return f"{location}Cycling heavy load"
+                return "Cycling compressor"
+            return "Cycling heavy load"
 
-        # Multi-stage = complex appliance cycle with distinct power levels
+        # Multi-stage = complex appliance with distinct power levels
         if num_phases >= 4:
             if avg_power > 2000:
-                return f"{location}Multi-stage heating"
+                return "Multi-stage heavy appliance"
             elif avg_power > 500:
-                return f"{location}Multi-stage appliance"
-            return f"{location}Variable load"
+                return "Multi-stage appliance"
+            return "Variable-speed electronics"
 
-        # Startup surge = motor
+        # Startup surge = motor load
         if has_surge:
             if avg_power < 300:
-                return f"{location}Small motor"
+                return "Small motor"
             elif avg_power < 1500:
-                return f"{location}Motor load"
-            return f"{location}Large motor"
+                return "Motor load"
+            return "Large motor"
 
-        # Sustained loads — describe by power level and duration
+        # Sustained loads — named by power level + duration pattern
         if avg_duration > 120:  # > 2 hours
-            if avg_power < 100:
-                return f"{location}Baseload"
-            elif avg_power < 500:
-                return f"{location}Continuous load ({avg_power:.0f}W)"
-            elif avg_power < 2000:
-                return f"{location}Heating/cooling ({avg_power:.0f}W)"
-            return f"{location}Heavy continuous ({avg_power:.0f}W)"
+            if avg_power < 30:
+                return "Standby power"
+            elif avg_power < 100:
+                return "Always-on electronics"
+            elif avg_power < 300:
+                return "Continuous appliance ({:.0f}W)".format(avg_power)
+            elif avg_power < 800:
+                return "Sustained load ({:.0f}W)".format(avg_power)
+            elif avg_power < 1500:
+                return "Heater or sustained motor ({:.0f}W)".format(avg_power)
+            return "Heavy sustained load ({:.0f}W)".format(avg_power)
 
         if avg_duration > 20:  # 20 min - 2 hours
             if avg_power < 100:
-                return f"{location}Intermittent low load"
-            elif avg_power < 500:
-                return f"{location}Medium appliance ({avg_power:.0f}W)"
-            elif avg_power < 2000:
-                return f"{location}Large appliance ({avg_power:.0f}W)"
-            return f"{location}High-power load ({avg_power:.0f}W)"
+                return "Intermittent electronics"
+            elif avg_power < 300:
+                return "Medium appliance ({:.0f}W)".format(avg_power)
+            elif avg_power < 1000:
+                return "Appliance ({:.0f}W)".format(avg_power)
+            return "High-power appliance ({:.0f}W)".format(avg_power)
 
         # Short sessions (5-20 min)
         if avg_power < 200:
-            return f"{location}Brief low load"
+            return "Brief low-power load"
         elif avg_power < 1000:
-            return f"{location}Short-cycle load ({avg_power:.0f}W)"
-        return f"{location}Short heavy load ({avg_power:.0f}W)"
+            return "Short-run appliance ({:.0f}W)".format(avg_power)
+        return "Short high-power load ({:.0f}W)".format(avg_power)
 
     @staticmethod
     def find_cross_circuit_matches(

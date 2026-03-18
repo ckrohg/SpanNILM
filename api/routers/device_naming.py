@@ -138,19 +138,12 @@ def _build_suggest_prompt(template: dict) -> str:
 
     is_sub_panel = "sub panel" in circuit_name.lower() or "subpanel" in circuit_name.lower()
 
-    return f"""You are analyzing a power consumption pattern detected on a residential electrical circuit in a home in New England (MA). Your job is to identify what specific device or appliance is producing this pattern.
+    return f"""You are an electrical load identification expert. Identify what device produces this power consumption pattern based PRIMARILY on its electrical characteristics, NOT the circuit name.
 
-IMPORTANT CONTEXT:
-This home already has these devices on DEDICATED circuits (already identified — do NOT suggest these):
-{dedicated_info or "No dedicated circuits configured"}
-
-The device you're identifying is on circuit "{circuit_name}".
-{"This is a SUB-PANEL circuit — it feeds multiple outlets/loads in that area. The detected pattern is one specific load among potentially many on this sub-panel. Think about what appliances/devices are commonly found in a " + circuit_name.lower().replace("sub panel", "").strip() + "." if is_sub_panel else ""}
-
-DEVICE MEASUREMENTS:
+CONSUMPTION PROFILE (this is your primary evidence):
 - Average power: {avg_power}W
 - Peak power: {peak_power}W
-- Power stages: {num_phases} (distinct power levels during operation)
+- Power stages: {num_phases} distinct power levels during operation
 - Has startup surge: {has_surge}
 - Average session duration: {avg_duration:.1f} minutes
 - Sessions per day: {sessions_per_day}
@@ -158,31 +151,44 @@ DEVICE MEASUREMENTS:
 - Is cycling (regular on/off): {is_cycling}
 - Duty cycle: {duty_cycle:.1%}
 - Energy per session: {energy_per_session}Wh
+- Correlated circuits: {corr_str}
 
 Power curve shape (normalized 0-1, 32 points across session):
 [{curve_str}]
 
-Correlated circuits (activate at same time): {corr_str}
+IDENTIFICATION RULES (follow these strictly):
 
-CRITICAL RULES:
-1. The power level MUST match the device type. Do NOT suggest:
-   - "Space heater" for anything under 500W (space heaters are 750-1500W)
-   - "Heater" or "Space heater" for loads under 200W — those are electronics, fans, or lights
-   - Any heating device for loads under 100W — those are chargers, standby, LED lighting, or electronics
-2. Do NOT suggest HVAC/heat pump/compressor — those are already on dedicated circuits listed above
-3. Do NOT repeat the same device type already detected on this circuit — each device should be unique
-4. Match the power level carefully:
-   - Under 20W: charger, standby power, LED indicator, smart plug, WiFi router
-   - 20-75W: LED lighting, ceiling fan, small electronics, phone/laptop charger, modem/router
-   - 75-200W: computer monitor, desktop computer, entertainment system, bathroom exhaust fan, ceiling fan on high
-   - 200-500W: dehumidifier, chest freezer compressor, computer + monitors, power tools (idle)
-   - 500-1000W: sump pump, large dehumidifier, power tools (active), hair dryer (low)
-   - 1000-1500W: space heater, hair dryer (high), vacuum, iron, stock tank heater
-   - 1500-3000W: large space heater, workshop equipment, kiln, large motor
-5. The circuit name tells you the LOCATION — suggest devices appropriate for that location
+STEP 1 — Match by power consumption pattern first:
+- Under 15W sustained 24/7: standby power, smart plug, WiFi router, phone charger
+- 15-50W sustained: LED lighting, modem/router, set-top box, laptop charger
+- 50-100W cycling: small compressor (beverage cooler, wine fridge), aquarium pump
+- 50-100W sustained: ceiling fan, desktop computer idle, entertainment system standby
+- 100-200W cycling (15-45min on/off): chest freezer compressor, mini fridge compressor
+- 100-200W sustained: desktop computer active, bathroom exhaust fan, multiple LED circuits
+- 200-500W cycling (20-40min on/off): dehumidifier compressor, window AC
+- 200-500W intermittent: power tools, sewing machine, food processor
+- 500-1000W cycling: sump pump (brief), large dehumidifier, window AC compressor
+- 500-1000W sustained (hours): space heater (low), electric blanket, kiln warming
+- 1000-1500W cycling or sustained: space heater (high), hair dryer, vacuum, iron
+- 1500-3000W: large heater, workshop equipment, large motor, kiln
 
-Return ONLY a JSON array of 2-3 objects with "name" and "reasoning" fields. Each suggestion must be a DIFFERENT type of device. Be specific.
-Example: [{{"name": "Chest Freezer Compressor", "reasoning": "87W cycling pattern with 277min average sessions matches a chest freezer compressor cycle"}}]"""
+STEP 2 — Use cycling pattern to narrow down:
+- Regular cycling every 15-45 min = compressor (fridge, freezer, dehumidifier, AC)
+- Irregular brief bursts = motor (pump, tool, opener)
+- Long sustained runs = resistive (heater, iron, dryer element)
+- Frequent short sessions (5-15 min) = human-triggered (hair dryer, microwave, coffee maker)
+
+STEP 3 — Only THEN consider the circuit location as a tiebreaker:
+- Circuit: "{circuit_name}"
+- Use location only to choose between equally-likely candidates
+
+ALREADY IDENTIFIED (do NOT suggest these device types):
+{dedicated_info or "None"}
+
+DO NOT include the circuit location in the device name. Say "Chest Freezer Compressor" not "Barn Chest Freezer Compressor". Say "Dehumidifier" not "Basement Dehumidifier".
+
+Return ONLY a JSON array of 2-3 objects with "name" and "reasoning" fields. The reasoning MUST reference the specific power/cycling characteristics that led to the identification, NOT just the circuit name.
+Example: [{{"name": "Chest Freezer Compressor", "reasoning": "87W cycling with 15min on/45min off pattern and slight startup surge is characteristic of a small compressor — most likely a chest freezer"}}]"""
 
 
 def _parse_claude_suggestions(response_text: str) -> list[dict]:
