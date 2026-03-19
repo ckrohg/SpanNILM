@@ -204,17 +204,16 @@ Air-Water 1 (Heat Pump), Air-Water 2 (Heat Pump), Mini Split - Office/Living Roo
 
 ## Detection Success Criteria
 
-### Per-Circuit Results (v2 pipeline, March 2026)
-| Circuit | Before (v1) | After (v2) | Devices Found |
-|---------|-------------|------------|---------------|
-| Basement Sub Panel | 2 generic loads | **12 devices** | Dehumidifier, sump pump, baseload (414W), 9 more at distinct power levels |
-| Barn Sub Panel | 3 generic loads | **13 devices** | Space heaters (297W, 599W, 841W), barn equipment, baseload (132W) |
-| 2nd Floor Sub Panel | 2 generic loads | **9 devices** | Bathroom exhaust (35W, 45W), space heater (453W), baseload (35W) |
-| Lights/Outlets | 3 devices | **2 devices** | More specific naming |
-| Hydronic Zone Pumps | 1 device | **2 devices** | Zone pumps at 14W and 23W |
-| Garage Door Opener | 1 device | **1 device** | Garage refrigerator/freezer (10W) |
-| Hydronic Glycol Feeder | 0 devices | **0 devices** | Below detection threshold |
-| **TOTAL** | **~16 devices** | **~39 devices** | **2.4x improvement** |
+### Per-Circuit Results (v3 pipeline, March 2026)
+| Circuit | Before (v1) | After (v3) | Devices Found (consumption-profile names) |
+|---------|-------------|------------|-------------------------------------------|
+| Barn Sub Panel | 3 generic loads | **8 devices** | Chest Freezer (127W), Refrigerator (92W), Space heater (1042W), Sump pump (653W), Desktop computer (161W), LED lighting (35W), Mini fridge (55W), Window AC (311W) |
+| Basement Sub Panel | 2 generic loads | **4 devices** | Water heater (408W), Desktop Computer (148W), Mini fridge (86W), Window AC (347W) |
+| 2nd Floor Sub Panel | 2 generic loads | **4 devices** | WiFi Router (35W, 45W), Mini refrigerator (74W), Window AC (321W) |
+| Lights/Outlets | 3 devices | **2 devices** | Mini refrigerator (45W, 54W) |
+| Hydronic Zone Pumps | 1 device | **1 device** | WiFi Router (20W) |
+| Garage Door Opener | 1 device | **1 device** | WiFi Router (10W) |
+| **TOTAL** | **~16 devices** | **~20 devices** | **0% circuit-name bias (was 96%)** |
 
 ### Quality Metrics
 - **No HVAC false positives**: shared circuits should NOT be labeled as heat pumps/compressors when HVAC is already on dedicated circuits (Bayesian prior handles this)
@@ -230,6 +229,17 @@ Air-Water 1 (Heat Pump), Air-Water 2 (Heat Pump), Mini Split - Office/Living Roo
 4. Dashboard → expand each shared circuit → verify device count and names
 5. Dashboard → Learned Devices section → confirm/reject → names persist across re-runs
 6. Categories page → verify devices categorized correctly (no HVAC on sub-panels)
+
+### Circuit-Name Bias Fix (Critical Lesson)
+The naming system went through 6 iterations to eliminate circuit-name bias:
+1. `_infer_name()` checked circuit name FIRST → removed all checks
+2. ML classifier overrode names with "Hydronic Pump" → changed to confidence-only boost
+3. Auto-naming Claude prompt included circuit name → removed
+4. LLM adjudication prompt included circuit name → removed
+5. ML classifier predictions passed as LLM candidates → removed from prompt
+6. Signature matcher had 15% location weight → set to 0%
+
+**Key principle**: Every component in the pipeline must be consumption-profile-first. Any stage that sees the circuit name will bias toward it.
 
 ### Known Issues & Limitations
 - **10-min resolution**: can't detect devices that run < 10 min (microwave, blender, toaster)
