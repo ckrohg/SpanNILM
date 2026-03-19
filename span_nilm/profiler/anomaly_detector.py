@@ -163,13 +163,34 @@ class AnomalyDetector:
         return anomalies
 
     def _check_extended_runs(self, agg_full: pd.DataFrame, now: datetime) -> list[Anomaly]:
-        """Check if any circuit has been continuously ON for >3x its typical session duration."""
+        """Check if any circuit has been continuously ON for >5x its typical session duration.
+
+        EXCLUDES:
+        - Sub-panel circuits (always have power from multiple devices)
+        - HVAC/heat pump circuits (run continuously in cold weather — normal)
+        - Circuits with "hydronic" in name (continuous circulation is normal)
+        """
         anomalies = []
         ts_str = now.isoformat()
+
+        # Patterns to skip (these circuits run continuously by design)
+        SKIP_PATTERNS = [
+            "sub panel", "subpanel", "sub-panel",  # Sub-panels always have power
+            "mini split", "mini-split", "heat pump",  # HVAC runs continuously in winter
+            "hvac", "compressor", "air handler",
+            "hydronic", "zone pump", "glycol",  # Hydronic systems circulate continuously
+            "air-water", "air water",
+        ]
 
         for cid, group in agg_full.groupby("circuit_id"):
             group = group.sort_values("timestamp")
             circuit_name = group["circuit_name"].iloc[0]
+
+            # Skip circuits that naturally run continuously
+            name_lower = circuit_name.lower()
+            if any(pat in name_lower for pat in SKIP_PATTERNS):
+                continue
+
             powers = group["power_w"].values
             timestamps = group["timestamp"].values
 
@@ -201,9 +222,9 @@ class AnomalyDetector:
             if current_start is not None:
                 current_duration = (timestamps[-1] - timestamps[current_start]) / np.timedelta64(1, "m")
                 current_duration = float(current_duration)
-                if current_duration > 3 * typical_duration and current_duration > 60:
+                if current_duration > 5 * typical_duration and current_duration > 120:
                     ratio = current_duration / typical_duration
-                    severity = "alert" if ratio > 6 else "warning"
+                    severity = "alert" if ratio > 10 else "warning"
                     anomalies.append(Anomaly(
                         circuit_name=circuit_name,
                         anomaly_type="extended_run",
