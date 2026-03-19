@@ -90,11 +90,13 @@ class SignatureMatcher:
     """
 
     # Dimension weights (must sum to 1.0)
+    # Location is DISABLED to prevent circuit-name bias in matching.
+    # Redistributed weight to power and cycling (consumption profile).
     WEIGHTS = {
-        "power": 0.30,
+        "power": 0.35,
         "duration": 0.15,
-        "cycling": 0.15,
-        "location": 0.15,
+        "cycling": 0.25,
+        "location": 0.0,
         "time_of_day": 0.10,
         "seasonal": 0.10,
         "stability": 0.05,

@@ -122,15 +122,19 @@ POWER CONSUMPTION PROFILE:
 - Peak hours: {peak_hours}
 - Power curve shape: |{sparkline}|
 
-CANDIDATE IDENTIFICATIONS:
-From signature matching: {sig_str}
-From ML classifier: {ml_str}
-
 RULES:
 - Identify PURELY from the power profile above. What device draws {avg_power:.0f}W with this pattern?
 - Do NOT use circuit name or location. A 45W cycling load is the same device regardless of where it is.
-- Under 100W cycling = small compressor or electronics. NOT a pump or heater.
-- 100-300W cycling = dehumidifier, freezer, or fan. NOT a heater unless >500W.
+- Match by power level + cycling pattern:
+  * Under 50W sustained: LED lighting, charger, standby electronics, WiFi router
+  * 50-100W cycling: small compressor (mini fridge, beverage cooler), aquarium pump
+  * 50-100W sustained: ceiling fan, computer idle, entertainment standby
+  * 100-200W cycling: chest freezer compressor, mini fridge
+  * 100-200W sustained: desktop computer, bathroom exhaust fan
+  * 200-500W cycling: dehumidifier, window AC
+  * 500-1000W: sump pump, large dehumidifier, power tools
+  * 1000-1500W: space heater, hair dryer, vacuum
+- Do NOT say "pump" or "circulator" unless the cycling pattern specifically matches (brief bursts, 1-10 min)
 
 Pick the single best identification or suggest a better one.
 Return ONLY a JSON object: {{"name": "...", "confidence": 0.0-1.0, "reasoning": "..."}}"""
