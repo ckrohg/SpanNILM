@@ -252,7 +252,25 @@ The naming system went through 6 iterations to eliminate circuit-name bias:
 - **Profiler timeout**: Railway HTTP timeout hits before 90-day profiler + LLM analysis completes. Profiles save successfully but the HTTP response returns error. Use 30-day window or increase Railway timeout.
 
 ## Deployment Notes
+
+### CRITICAL: Vercel deploy ALWAYS fails from repo root
+Vercel sees the Python Dockerfile and tries to run `vite build` in a Python environment → "command not found."
+**ALWAYS deploy Vercel from the `web/` subdirectory using absolute path:**
+```bash
+cd /Users/ckrohg/Documents/Claude/SpanNILM/web && vercel --yes --prod
+```
+**NEVER chain with Railway deploy** — use separate commands:
+```bash
+# Railway: from project root
+cd /Users/ckrohg/Documents/Claude/SpanNILM && railway up --detach
+# Vercel: from web/ (SEPARATE command)
+cd /Users/ckrohg/Documents/Claude/SpanNILM/web && vercel --yes --prod
+```
+
+### Other deployment notes
 - `git -c user.email=ckrohg@me.com commit` — must use this email
-- Vercel: `cd web && vercel --yes --prod` (NOT from repo root — picks up Python files)
-- Railway: `railway up --detach` from repo root
-- After profiler changes: re-run `POST /api/profile` then `POST /api/devices/auto-name`
+- Git operations: from project root `/Users/ckrohg/Documents/Claude/SpanNILM`
+- Python verify: `cd /Users/ckrohg/Documents/Claude/SpanNILM && export $(grep -v '^#' .env | xargs) && python3 -c "from api.main import app; print('OK')"`
+- TypeScript verify: `cd /Users/ckrohg/Documents/Claude/SpanNILM/web && npx tsc --noEmit`
+- After profiler changes: re-run `POST /api/profile/cron` (runs profiler + auto-naming)
+- Supabase connection pool: limit concurrent profiler runs — pool exhaustion causes connection timeouts
