@@ -266,10 +266,29 @@ export async function fetchDashboard(period: DateRange = 'today'): Promise<Dashb
   return res.json()
 }
 
-export async function runProfile(days = 30): Promise<{ status: string; profiles_saved: number }> {
+export async function startProfile(days = 90): Promise<{ status: string; task_id: string }> {
   const res = await fetch(`${API_URL}/api/profile?days=${days}`, { method: 'POST' })
   if (!res.ok) throw new Error(`Profile failed: ${res.status}`)
   return res.json()
+}
+
+export interface TaskStatus {
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'not_found'
+  started_at: string | null
+  completed_at: string | null
+  result: Record<string, unknown> | null
+  error: string | null
+}
+
+export async function getProfileStatus(taskId: string): Promise<TaskStatus> {
+  const res = await fetch(`${API_URL}/api/profile/status/${taskId}`)
+  if (!res.ok) throw new Error(`Status check failed: ${res.status}`)
+  return res.json()
+}
+
+/** @deprecated Use startProfile instead */
+export async function runProfile(days = 30): Promise<{ status: string; task_id: string }> {
+  return startProfile(days)
 }
 
 export async function getProfiles(): Promise<{ status: string; profiles: unknown[] }> {

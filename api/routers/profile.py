@@ -2,10 +2,12 @@
 
 import logging
 import os
+import time
 from typing import Optional
 
 from fastapi import APIRouter, Query
 
+from api.background import get_task, run_in_background
 from api.deps import get_tempiq_source
 from api.routers.device_naming import auto_name_all_devices
 from span_nilm.profiler.circuit_profiler import CircuitProfiler
@@ -14,12 +16,8 @@ logger = logging.getLogger("span_nilm.api.profile")
 router = APIRouter(prefix="/api")
 
 
-@router.post("/profile")
-def run_profile(
-    equipment_id: Optional[str] = Query(default=None, description="Profile a single circuit"),
-    days: int = Query(default=90, ge=7, le=180, description="Days of history to analyze"),
-):
-    """Run the circuit profiler on all circuits (or a specific one) and store results."""
+def _do_profile(days: int, equipment_id: str | None = None) -> dict:
+    """Run the full profiler pipeline. Called from background thread."""
     source = get_tempiq_source()
     profiler = CircuitProfiler(
         source=source,
@@ -37,50 +35,23 @@ def run_profile(
     logger.info("Saved %d circuit profiles", saved)
 
     # Auto-name unnamed devices after saving profiles
+    auto_named = 0
     try:
         auto_result = auto_name_all_devices()
-        logger.info("Auto-named %d devices", auto_result.get("named", 0))
+        auto_named = auto_result.get("named", 0)
+        logger.info("Auto-named %d devices", auto_named)
     except Exception as e:
         logger.warning("Auto-naming failed (non-fatal): %s", e)
 
     return {
-        "status": "ok",
         "profiles_saved": saved,
-        "profiles": [
-            {
-                "equipment_id": p.equipment_id,
-                "circuit_name": p.circuit_name,
-                "is_dedicated": p.is_dedicated,
-                "dedicated_device_type": p.dedicated_device_type,
-                "total_readings": p.total_readings,
-                "active_pct": p.active_pct,
-                "baseload_w": p.baseload_w,
-                "states": [
-                    {
-                        "center_w": s.center_w,
-                        "count": s.count,
-                        "pct_of_time": s.pct_of_time,
-                        "avg_duration_min": s.avg_duration_min,
-                        "peak_hours": s.peak_hours,
-                        "device_name": s.device_name,
-                        "confidence": s.confidence,
-                    }
-                    for s in p.states
-                ],
-            }
-            for p in profiles
-        ],
+        "devices_named": auto_named,
+        "profile_count": len(profiles),
     }
 
 
-@router.post("/profile/cron")
-def run_profile_cron():
-    """Cron endpoint for weekly profiler + auto-naming.
-
-    Call via Railway cron or external scheduler.
-    Runs the full profiler (30 days) then auto-names new devices.
-    Returns a summary.
-    """
+def _do_profile_cron() -> dict:
+    """Run the cron profiler pipeline. Called from background thread."""
     errors: list[str] = []
     profiles_saved = 0
     named_count = 0
@@ -117,6 +88,40 @@ def run_profile_cron():
         "profiles_saved": profiles_saved,
         "devices_named": named_count,
         "errors": errors[:20],
+    }
+
+
+@router.post("/profile")
+def run_profile(
+    equipment_id: Optional[str] = Query(default=None, description="Profile a single circuit"),
+    days: int = Query(default=90, ge=7, le=180, description="Days of history to analyze"),
+):
+    """Run the circuit profiler in background. Returns task_id for polling."""
+    task_id = f"profile-{int(time.time())}"
+    run_in_background(task_id, _do_profile, days, equipment_id)
+    return {"status": "started", "task_id": task_id}
+
+
+@router.post("/profile/cron")
+def run_profile_cron():
+    """Cron endpoint for weekly profiler + auto-naming. Runs in background."""
+    task_id = f"profile-cron-{int(time.time())}"
+    run_in_background(task_id, _do_profile_cron)
+    return {"status": "started", "task_id": task_id}
+
+
+@router.get("/profile/status/{task_id}")
+def get_profile_status(task_id: str):
+    """Poll for background task status."""
+    task = get_task(task_id)
+    if not task:
+        return {"status": "not_found"}
+    return {
+        "status": task.status,
+        "started_at": task.started_at.isoformat() if task.started_at else None,
+        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        "result": task.result if task.status == "completed" else None,
+        "error": task.error,
     }
 
 

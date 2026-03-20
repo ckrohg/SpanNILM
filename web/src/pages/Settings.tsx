@@ -1,5 +1,13 @@
-import { useEffect, useState } from 'react'
-import { getSettings, updateSettings, type Settings as SettingsType, type TOUSchedule } from '../lib/api'
+import { useEffect, useRef, useState } from 'react'
+import {
+  getSettings,
+  updateSettings,
+  startProfile,
+  getProfileStatus,
+  type Settings as SettingsType,
+  type TOUSchedule,
+  type TaskStatus,
+} from '../lib/api'
 
 const US_TIMEZONES = [
   'America/New_York',
@@ -53,6 +61,12 @@ export default function Settings() {
   const [tou, setTou] = useState<TOUSchedule>(DEFAULT_TOU)
   const [touDirty, setTouDirty] = useState(false)
 
+  // Profiler background task state
+  const [profilerTaskId, setProfilerTaskId] = useState<string | null>(null)
+  const [profilerStatus, setProfilerStatus] = useState<TaskStatus | null>(null)
+  const [profilerDays, setProfilerDays] = useState(90)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   // Save status per field
   const [saving, setSaving] = useState<Record<string, boolean>>({})
   const [saved, setSaved] = useState<Record<string, boolean>>({})
@@ -82,6 +96,35 @@ export default function Settings() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
   }, [])
+
+  // Poll profiler task status
+  useEffect(() => {
+    if (!profilerTaskId) return
+    // Initial check
+    getProfileStatus(profilerTaskId).then(setProfilerStatus).catch(() => {})
+    // Poll every 5 seconds
+    pollRef.current = setInterval(() => {
+      getProfileStatus(profilerTaskId).then((s) => {
+        setProfilerStatus(s)
+        if (s.status === 'completed' || s.status === 'failed' || s.status === 'not_found') {
+          if (pollRef.current) clearInterval(pollRef.current)
+        }
+      }).catch(() => {})
+    }, 5000)
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [profilerTaskId])
+
+  const handleRunProfiler = async () => {
+    try {
+      setProfilerStatus(null)
+      const { task_id } = await startProfile(profilerDays)
+      setProfilerTaskId(task_id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to start profiler')
+    }
+  }
 
   const handleSave = async (key: string, value: string) => {
     setSaving((prev) => ({ ...prev, [key]: true }))
@@ -576,6 +619,103 @@ export default function Settings() {
         <p className="text-xs text-gray-600 mt-2">
           With net metering, excess solar production is credited to your bill at the retail rate.
           Without it, you only save on electricity you use while solar is producing.
+        </p>
+      </div>
+
+      {/* Device Detection Section */}
+      <div className="pt-2">
+        <h3 className="text-base font-semibold mb-1">Device Detection</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Re-run the detection pipeline to identify devices on your circuits.
+          This includes shape detection, ML classification, and AI naming.
+        </p>
+      </div>
+
+      <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
+          Re-run Detection
+        </label>
+        <div className="flex items-center gap-3">
+          <select
+            value={profilerDays}
+            onChange={(e) => setProfilerDays(parseInt(e.target.value))}
+            disabled={profilerStatus?.status === 'running' || profilerStatus?.status === 'pending'}
+            className="max-w-[140px] bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          >
+            <option value={30}>30 days</option>
+            <option value={60}>60 days</option>
+            <option value={90}>90 days</option>
+            <option value={120}>120 days</option>
+            <option value={180}>180 days</option>
+          </select>
+          <button
+            onClick={handleRunProfiler}
+            disabled={profilerStatus?.status === 'running' || profilerStatus?.status === 'pending'}
+            className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+              profilerStatus?.status === 'running' || profilerStatus?.status === 'pending'
+                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-500 text-white'
+            }`}
+          >
+            {profilerStatus?.status === 'running' || profilerStatus?.status === 'pending'
+              ? 'Running...'
+              : 'Run Detection'}
+          </button>
+        </div>
+
+        {/* Status indicator */}
+        {profilerStatus && (
+          <div className={`mt-3 rounded-lg p-3 text-sm ${
+            profilerStatus.status === 'running' || profilerStatus.status === 'pending'
+              ? 'bg-blue-900/20 border border-blue-800/40 text-blue-300'
+              : profilerStatus.status === 'completed'
+              ? 'bg-green-900/20 border border-green-800/40 text-green-300'
+              : profilerStatus.status === 'failed'
+              ? 'bg-red-900/20 border border-red-800/40 text-red-300'
+              : 'bg-gray-800/20 border border-gray-700/40 text-gray-400'
+          }`}>
+            {(profilerStatus.status === 'running' || profilerStatus.status === 'pending') && (
+              <div className="flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>
+                  Detection pipeline is running. This typically takes 5-10 minutes.
+                  {profilerStatus.started_at && (
+                    <> Started {new Date(profilerStatus.started_at).toLocaleTimeString()}.</>
+                  )}
+                </span>
+              </div>
+            )}
+            {profilerStatus.status === 'completed' && (
+              <div>
+                Detection completed successfully.
+                {profilerStatus.result && (
+                  <>
+                    {' '}Saved {String(profilerStatus.result.profiles_saved ?? '?')} profiles,
+                    named {String(profilerStatus.result.devices_named ?? '0')} devices.
+                  </>
+                )}
+                {profilerStatus.completed_at && (
+                  <> Finished {new Date(profilerStatus.completed_at).toLocaleTimeString()}.</>
+                )}
+              </div>
+            )}
+            {profilerStatus.status === 'failed' && (
+              <div>
+                Detection failed: {profilerStatus.error || 'Unknown error'}.
+                {profilerStatus.completed_at && (
+                  <> At {new Date(profilerStatus.completed_at).toLocaleTimeString()}.</>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <p className="text-xs text-gray-600 mt-2">
+          Runs the full pipeline: shape detection, signature matching, ML classification,
+          and Claude AI naming. Results will be visible on the dashboard once complete.
         </p>
       </div>
     </div>

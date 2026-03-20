@@ -11,6 +11,8 @@ import psycopg2.extras
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from api.background import get_task, run_in_background
+
 logger = logging.getLogger("span_nilm.api.device_naming")
 router = APIRouter(prefix="/api")
 
@@ -292,6 +294,28 @@ def set_device_name(equipment_id: str, cluster_id: int, body: DeviceNameUpdate):
 
 
 @router.post("/devices/auto-name")
+def auto_name_endpoint():
+    """Batch AI naming — runs in background. Returns task_id for polling."""
+    task_id = f"auto-name-{int(time.time())}"
+    run_in_background(task_id, auto_name_all_devices)
+    return {"status": "started", "task_id": task_id}
+
+
+@router.get("/devices/auto-name/status/{task_id}")
+def get_auto_name_status(task_id: str):
+    """Poll for auto-name background task status."""
+    task = get_task(task_id)
+    if not task:
+        return {"status": "not_found"}
+    return {
+        "status": task.status,
+        "started_at": task.started_at.isoformat() if task.started_at else None,
+        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        "result": task.result if task.status == "completed" else None,
+        "error": task.error,
+    }
+
+
 def auto_name_all_devices():
     """Batch AI naming: call Claude Haiku for every unnamed device and save results.
 
@@ -429,7 +453,29 @@ def auto_name_all_devices():
 
 
 @router.post("/analyze/llm")
-def run_llm_analysis():
+def run_llm_analysis_endpoint():
+    """Run Mode B + C LLM analysis in background. Returns task_id for polling."""
+    task_id = f"llm-analysis-{int(time.time())}"
+    run_in_background(task_id, _do_llm_analysis)
+    return {"status": "started", "task_id": task_id}
+
+
+@router.get("/analyze/llm/status/{task_id}")
+def get_llm_analysis_status(task_id: str):
+    """Poll for LLM analysis background task status."""
+    task = get_task(task_id)
+    if not task:
+        return {"status": "not_found"}
+    return {
+        "status": task.status,
+        "started_at": task.started_at.isoformat() if task.started_at else None,
+        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        "result": task.result if task.status == "completed" else None,
+        "error": task.error,
+    }
+
+
+def _do_llm_analysis():
     """Run Mode B + C LLM analysis on all circuits.
 
     Mode B: Circuit story analysis on sub-panel circuits (Sonnet)
@@ -449,7 +495,7 @@ def run_llm_analysis():
         conn.close()
 
     if not profiles:
-        raise HTTPException(404, "No circuit profiles found. Run POST /api/profile first.")
+        raise ValueError("No circuit profiles found. Run POST /api/profile first.")
 
     # Parse JSONB fields
     for p in profiles:
@@ -503,7 +549,6 @@ def run_llm_analysis():
         conn.close()
 
     return {
-        "status": "ok",
         "adjudications": len(results.get("adjudications", {})),
         "circuit_stories": len(results.get("circuit_stories", {})),
         "reconciliation": results.get("reconciliation", {}),
