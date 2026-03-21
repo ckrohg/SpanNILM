@@ -180,7 +180,16 @@ STEP 2 — Use cycling pattern to narrow down:
 - Long sustained runs = resistive (heater, iron, dryer element)
 - Frequent short sessions (5-15 min) = human-triggered (hair dryer, microwave, coffee maker)
 
-STEP 3 — If two candidates are equally likely from power profile alone, you may consider
+STEP 3 — Apply seasonal context:
+- Current season: WINTER (New England, March). In winter:
+  * Do NOT suggest "window AC" or "air conditioner" — ACs are off in winter
+  * Cycling 200-500W loads in winter are more likely dehumidifiers, not ACs
+  * Sustained high-power loads are more likely heaters
+- If this device runs continuously (session >24h), call it what it is:
+  * "Always-on load" or the specific device if identifiable (server, network equipment, etc.)
+  * Do NOT call a continuous load a "refrigerator" with "1 session" — just say it's always-on
+
+STEP 4 — If two candidates are equally likely from power profile alone, you may consider
 that this device is in a residential home in New England. Do NOT use the circuit name
 to guess — focus only on what the power consumption pattern tells you.
 

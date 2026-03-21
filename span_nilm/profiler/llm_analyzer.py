@@ -131,10 +131,12 @@ RULES:
   * 50-100W sustained: ceiling fan, computer idle, entertainment standby
   * 100-200W cycling: chest freezer compressor, mini fridge
   * 100-200W sustained: desktop computer, bathroom exhaust fan
-  * 200-500W cycling: dehumidifier, window AC
+  * 200-500W cycling: dehumidifier (NOT window AC — it's winter in New England)
   * 500-1000W: sump pump, large dehumidifier, power tools
   * 1000-1500W: space heater, hair dryer, vacuum
+- Do NOT suggest "window AC" or "air conditioner" — it is currently WINTER
 - Do NOT say "pump" or "circulator" unless the cycling pattern specifically matches (brief bursts, 1-10 min)
+- If session duration is >24 hours, this is an always-on load, not a single device "session"
 
 Pick the single best identification or suggest a better one.
 Return ONLY a JSON object: {{"name": "...", "confidence": 0.0-1.0, "reasoning": "..."}}"""

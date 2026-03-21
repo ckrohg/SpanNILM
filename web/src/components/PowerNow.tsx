@@ -325,7 +325,9 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                                   }
                                 }}
                               >
-                                {displayName.replace(/_/g, ' ')}
+                                {displayName.toLowerCase().includes('unidentified') ? (
+                                  <span className="text-yellow-600 dark:text-yellow-400 italic">Unknown device — tap to identify</span>
+                                ) : displayName.replace(/_/g, ' ')}
                                 {d.user_confirmed && (
                                   <span className="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-green-900/40 text-green-400 border border-green-800/40" title="User confirmed">confirmed</span>
                                 )}
@@ -380,9 +382,17 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
                             </div>
                             {hasShapeData && (
                               <div className="flex items-center gap-3 pl-5 mt-0.5 text-[11px] text-gray-500">
-                                <span>{d.session_count} sessions</span>
-                                <span>{formatDuration(d.avg_duration_min)} avg</span>
-                                <span>{d.energy_per_session_wh.toFixed(0)} Wh/session</span>
+                                {d.avg_duration_min > 1440 ? (
+                                  <span className="text-amber-600 dark:text-amber-400 font-medium">Always on</span>
+                                ) : (
+                                  <>
+                                    <span>{d.session_count} sessions</span>
+                                    <span>{formatDuration(d.avg_duration_min)} avg</span>
+                                  </>
+                                )}
+                                {d.avg_duration_min <= 1440 && (
+                                  <span>{d.energy_per_session_wh.toFixed(0)} Wh/session</span>
+                                )}
                                 {d.is_cycling && (
                                   <span className="px-1.5 py-0 rounded bg-purple-900/50 text-purple-300 border border-purple-800/50">
                                     cycling
