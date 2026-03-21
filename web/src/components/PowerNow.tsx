@@ -208,8 +208,19 @@ interface PowerNowProps {
   onDeviceClick?: (equipmentId: string, clusterId: number) => void
 }
 
+type SortOption = 'energy_today' | 'energy_month' | 'power_now' | 'always_on' | 'name'
+
+const SORT_LABELS: Record<SortOption, string> = {
+  energy_today: 'Energy Today',
+  energy_month: 'Energy This Month',
+  power_now: 'Current Power',
+  always_on: 'Always-On',
+  name: 'Name (A-Z)',
+}
+
 export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: PowerNowProps) {
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<SortOption>('energy_today')
   const [namingTarget, setNamingTarget] = useState<{
     equipmentId: string
     clusterId: number
@@ -217,7 +228,16 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
   } | null>(null)
   const [renamedDevices, setRenamedDevices] = useState<Record<string, string>>({})
 
-  const sorted = [...circuits].sort((a, b) => b.energy_today_kwh - a.energy_today_kwh)
+  const sorted = [...circuits].sort((a, b) => {
+    switch (sortBy) {
+      case 'energy_today': return b.energy_today_kwh - a.energy_today_kwh
+      case 'energy_month': return b.energy_month_kwh - a.energy_month_kwh
+      case 'power_now': return b.power_w - a.power_w
+      case 'always_on': return b.always_on_w - a.always_on_w
+      case 'name': return a.name.localeCompare(b.name)
+      default: return 0
+    }
+  })
   const maxEnergy = sorted[0]?.energy_today_kwh || 1
 
   if (!sorted.length) {
@@ -230,6 +250,25 @@ export default function PowerNow({ circuits, onCircuitClick, onDeviceClick }: Po
 
   return (
     <>
+      {/* Sort selector */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] text-gray-500 uppercase tracking-wider">Sort by:</span>
+        <div className="flex flex-wrap gap-1">
+          {(Object.keys(SORT_LABELS) as SortOption[]).map((opt) => (
+            <button
+              key={opt}
+              onClick={() => setSortBy(opt)}
+              className={`px-2 py-0.5 text-[10px] rounded-full transition-colors ${
+                sortBy === opt
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              {SORT_LABELS[opt]}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="space-y-1">
         {sorted.map((circuit) => {
           const pct = maxEnergy > 0 ? (circuit.energy_today_kwh / maxEnergy) * 100 : 0
