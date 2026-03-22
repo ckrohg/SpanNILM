@@ -138,14 +138,9 @@ export default function StackedTimeline({ timeline, alwaysOnW }: Props) {
         return b[1] - a[1]
       })
 
-    // Top 10 individually, rest grouped as "Other"
-    const topCircuits = sorted.slice(0, 10).map(([name]) => name)
-    const otherCircuits = sorted.slice(10).map(([name]) => name)
-    const hasOther = otherCircuits.length > 0
-
-    // Build keys: stable/always-on first (bottom of stack), spiky last (top)
-    const keys = [...topCircuits]
-    if (hasOther) keys.push('Other')
+    // Show all circuits individually — with only 17 circuits, no need for "Other"
+    const allCircuits = sorted.map(([name]) => name)
+    const keys = [...allCircuits]
 
     const colors: Record<string, string> = {}
     keys.forEach((key, i) => {
@@ -158,16 +153,8 @@ export default function StackedTimeline({ timeline, alwaysOnW }: Props) {
         timestamp: bucket.timestamp,
       }
 
-      for (const name of topCircuits) {
+      for (const name of allCircuits) {
         point[name] = Math.max(0, Math.round(bucket.circuits[name] || 0))
-      }
-
-      if (hasOther) {
-        let otherSum = 0
-        for (const name of otherCircuits) {
-          otherSum += bucket.circuits[name] || 0
-        }
-        point['Other'] = Math.max(0, Math.round(otherSum))
       }
 
       return point
