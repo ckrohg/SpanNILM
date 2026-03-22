@@ -4,40 +4,45 @@ import type { DateRange } from '../lib/api'
 
 export function useDashboard(period: DateRange = 'today') {
   const [data, setData] = useState<DashboardData | null>(null)
-  const [loading, setLoading] = useState(true) // Only true on initial load
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const hasLoadedOnce = useRef(false)
+  const isFetching = useRef(false)
 
   const refresh = useCallback(() => {
-    // Only show full loading state on first load — subsequent refreshes are silent
-    if (!hasLoadedOnce.current) {
+    // Don't show loading spinner if we already have data — keep it visible
+    // Only show skeleton on very first load (data === null)
+    if (!data) {
       setLoading(true)
     }
-    setError(null)
+
+    if (isFetching.current) return // prevent concurrent fetches
+    isFetching.current = true
+
     fetchDashboard(period)
       .then((d) => {
         setData(d)
         setLastUpdated(new Date())
-        hasLoadedOnce.current = true
+        setError(null)
       })
       .catch((e) => {
-        // Only set error if we have no data yet
-        if (!hasLoadedOnce.current) {
+        // Only show error if we have no data at all
+        if (!data) {
           setError(e.message)
         }
       })
-      .finally(() => setLoading(false))
-  }, [period])
+      .finally(() => {
+        setLoading(false)
+        isFetching.current = false
+      })
+  }, [period, data])
 
   useEffect(() => {
-    // Reset for new period
-    hasLoadedOnce.current = false
-    setLoading(true)
+    // Fetch immediately on period change — old data stays visible until new arrives
     refresh()
     const interval = setInterval(refresh, 30000)
     return () => clearInterval(interval)
-  }, [refresh])
+  }, [period]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return { data, loading, error, refresh, lastUpdated }
 }
