@@ -103,24 +103,47 @@ export default function StackedTimeline({ timeline, alwaysOnW }: Props) {
     )
   }
 
-  // Find all circuits and sort by total energy (largest first = bottom of stack)
+  // Sort circuits: most stable/always-on at bottom, most variable/spiky at top.
+  // This creates a flat baseline of always-on loads with active loads stacked above.
   const { chartData, sortedKeys, colorMap } = useMemo(() => {
     const circuitTotals: Record<string, number> = {}
+    const circuitVariance: Record<string, number> = {}
+    const circuitReadings: Record<string, number[]> = {}
+
     for (const bucket of timeline) {
       for (const [name, power] of Object.entries(bucket.circuits)) {
         circuitTotals[name] = (circuitTotals[name] || 0) + power
+        if (!circuitReadings[name]) circuitReadings[name] = []
+        circuitReadings[name].push(power)
       }
     }
 
+    // Compute coefficient of variation (std/mean) — lower = more stable = bottom of stack
+    for (const [name, readings] of Object.entries(circuitReadings)) {
+      const mean = readings.reduce((s, v) => s + v, 0) / readings.length
+      const variance = readings.reduce((s, v) => s + (v - mean) ** 2, 0) / readings.length
+      const std = Math.sqrt(variance)
+      circuitVariance[name] = mean > 0 ? std / mean : 0  // CV: 0 = perfectly flat, high = spiky
+    }
+
+    // Sort: most stable (lowest CV) first = renders at bottom of stack
+    // Tie-break by total energy (higher energy = more visually prominent at bottom)
     const sorted = Object.entries(circuitTotals)
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => {
+        const cvA = circuitVariance[a[0]] || 0
+        const cvB = circuitVariance[b[0]] || 0
+        // Stable loads (low CV) at bottom, spiky loads (high CV) at top
+        if (Math.abs(cvA - cvB) > 0.3) return cvA - cvB
+        // Tie-break: higher total energy at bottom (more visually stable)
+        return b[1] - a[1]
+      })
 
     // Top 10 individually, rest grouped as "Other"
     const topCircuits = sorted.slice(0, 10).map(([name]) => name)
     const otherCircuits = sorted.slice(10).map(([name]) => name)
     const hasOther = otherCircuits.length > 0
 
-    // Build keys: largest first (they render at bottom of stack)
+    // Build keys: stable/always-on first (bottom of stack), spiky last (top)
     const keys = [...topCircuits]
     if (hasOther) keys.push('Other')
 
