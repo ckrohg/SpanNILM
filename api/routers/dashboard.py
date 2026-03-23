@@ -207,7 +207,8 @@ def _aggregate_timeline(agg_data, bucket_minutes: int) -> list[TimelineBucket]:
         # Use the raw 10-min data as-is
         buckets: dict[str, dict[str, float]] = defaultdict(dict)
         for _, row in agg_data.iterrows():
-            ts_str = row["timestamp"].isoformat() if hasattr(row["timestamp"], "isoformat") else str(row["timestamp"])
+            ts_raw = row["timestamp"].isoformat() if hasattr(row["timestamp"], "isoformat") else str(row["timestamp"])
+            ts_str = ts_raw if ts_raw.endswith("Z") or "+" in ts_raw else ts_raw + "Z"
             buckets[ts_str][row["circuit_name"]] = round(float(row["power_w"]), 1)
 
         timeline = []
@@ -231,7 +232,8 @@ def _aggregate_timeline(agg_data, bucket_minutes: int) -> list[TimelineBucket]:
 
     buckets_map: dict[str, dict[str, float]] = defaultdict(dict)
     for _, row in grouped.iterrows():
-        ts_str = row["bucket"].isoformat()
+        ts_raw = row["bucket"].isoformat()
+        ts_str = ts_raw if ts_raw.endswith("Z") or "+" in ts_raw else ts_raw + "Z"
         buckets_map[ts_str][row["circuit_name"]] = round(float(row["power_w"]), 1)
 
     timeline = []

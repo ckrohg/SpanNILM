@@ -100,7 +100,7 @@ def get_circuit_detail(
         circuit_data = circuit_data.sort_values("timestamp")
         for _, row in circuit_data.iterrows():
             ts = row["timestamp"]
-            ts_str = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+            ts_raw = ts.isoformat() if hasattr(ts, "isoformat") else str(ts); ts_str = ts_raw if ts_raw.endswith("Z") or "+" in ts_raw else ts_raw + "Z"
             power_series.append(PowerPoint(timestamp=ts_str, power_w=round(float(row["power_w"]), 1)))
 
     # Stats
@@ -368,8 +368,8 @@ def get_device_detail(
                 session_energy_wh = session_avg_power * duration_min / 60
 
                 sessions.append(DeviceSession(
-                    start=ts_start.isoformat() if hasattr(ts_start, "isoformat") else str(ts_start),
-                    end=ts_end.isoformat() if hasattr(ts_end, "isoformat") else str(ts_end),
+                    start=(ts_start.isoformat() + "Z") if hasattr(ts_start, "isoformat") and not ts_start.isoformat().endswith("Z") else str(ts_start),
+                    end=(ts_end.isoformat() + "Z") if hasattr(ts_end, "isoformat") and not ts_end.isoformat().endswith("Z") else str(ts_end),
                     duration_min=round(duration_min, 1),
                     avg_power_w=round(session_avg_power, 1),
                     energy_wh=round(session_energy_wh, 1),
