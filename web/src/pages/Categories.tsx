@@ -81,6 +81,7 @@ interface CategoryData {
 
 const PERIOD_LABELS: Record<DateRange, string> = {
   today: 'Today',
+  '24h': 'Last 24 Hours',
   yesterday: 'Yesterday',
   '7d': 'Last 7 Days',
   '30d': 'Last 30 Days',

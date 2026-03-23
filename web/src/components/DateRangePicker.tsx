@@ -4,6 +4,7 @@ export type { DateRange }
 
 const OPTIONS: { value: DateRange; label: string }[] = [
   { value: 'today', label: 'Today' },
+  { value: '24h', label: 'Last 24h' },
   { value: 'yesterday', label: 'Yesterday' },
   { value: '7d', label: '7 Days' },
   { value: '30d', label: '30 Days' },

@@ -258,7 +258,7 @@ export interface CircuitDetailData {
   anomalies: Anomaly[]
 }
 
-export type DateRange = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'year' | '365d'
+export type DateRange = 'today' | '24h' | 'yesterday' | '7d' | '30d' | 'month' | 'year' | '365d'
 
 export async function fetchDashboard(period: DateRange = 'today'): Promise<DashboardData> {
   const res = await fetch(`${API_URL}/api/dashboard?period=${period}`, { method: 'POST' })

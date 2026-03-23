@@ -53,6 +53,7 @@ EASTERN_OFFSET = _get_eastern_offset()
 
 PERIOD_LABELS = {
     "today": "Today",
+    "24h": "Last 24 Hours",
     "yesterday": "Yesterday",
     "7d": "Last 7 Days",
     "30d": "Last 30 Days",
@@ -143,6 +144,9 @@ def _compute_period_range(period: str, now_eastern: datetime, eastern) -> tuple[
     if period == "today":
         start = now_eastern.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
         return start, now_utc, label
+    elif period == "24h":
+        start = now_utc - timedelta(hours=24)
+        return start, now_utc, label
     elif period == "yesterday":
         today_start = now_eastern.replace(hour=0, minute=0, second=0, microsecond=0)
         start = (today_start - timedelta(days=1)).astimezone(timezone.utc)
@@ -171,7 +175,7 @@ def _compute_period_range(period: str, now_eastern: datetime, eastern) -> tuple[
 
 def _get_bucket_minutes(period: str) -> int:
     """Return bucket size in minutes for timeline aggregation."""
-    if period in ("today", "yesterday"):
+    if period in ("today", "24h", "yesterday"):
         return 10
     elif period == "7d":
         return 60
