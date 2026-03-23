@@ -821,17 +821,6 @@ export default function Categories({ data, dateRange = 'today', onDateRangeChang
         </div>
       </div>
 
-      {/* Category cards grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {categoryData.map((d) => (
-          <CategoryCard
-            key={d.category}
-            data={d}
-            totalEnergyMonth={totalEnergyMonth}
-          />
-        ))}
-      </div>
-
       {/* Category Timeline */}
       <section>
         <h2 className="text-sm font-medium text-gray-400 mb-2">
