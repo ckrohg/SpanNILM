@@ -24,7 +24,7 @@ export default function AlwaysOnCard({
   const [expanded, setExpanded] = useState(false)
 
   const pctOfPower = totalPowerW > 0 ? Math.round((alwaysOnW / totalPowerW) * 100) : 0
-  const hoursToday = new Date().getHours() + new Date().getMinutes() / 60
+  const hoursToday = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours() + new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })).getMinutes() / 60
   const alwaysOnKwh = hoursToday > 0 ? (alwaysOnW * hoursToday) / 1000 : 0
   const alwaysOnMonthlyKwh = alwaysOnW * 24 * 30 / 1000
   const alwaysOnMonthlyCost = alwaysOnMonthlyKwh * electricityRate

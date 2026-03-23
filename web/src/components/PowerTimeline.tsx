@@ -22,7 +22,7 @@ function eventsToTimeline(events: PowerEvent[]): TimelinePoint[] {
     if (currentPower < 0) currentPower = 0
     const date = new Date(ev.timestamp)
     points.push({
-      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' }),
       power: Math.round(currentPower),
     })
   }

@@ -116,7 +116,7 @@ export default function DeviceDetail({ equipmentId, clusterId, onBack }: Props) 
   // Peak hours bar chart data
   const hourCounts: Record<number, number> = {}
   for (const session of data.sessions) {
-    const hour = new Date(session.start).getHours()
+    const hour = new Date(new Date(session.start).toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours()
     hourCounts[hour] = (hourCounts[hour] || 0) + 1
   }
   const peakHoursData = Array.from({ length: 24 }, (_, i) => ({

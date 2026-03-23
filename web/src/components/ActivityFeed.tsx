@@ -2,7 +2,7 @@ import type { PowerEvent } from '../lib/api'
 
 function formatTime(ts: string): string {
   const d = new Date(ts)
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })
 }
 
 function formatPower(watts: number): string {

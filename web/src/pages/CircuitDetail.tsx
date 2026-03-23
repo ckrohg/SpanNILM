@@ -78,7 +78,7 @@ export default function CircuitDetail({ equipmentId, onBack }: Props) {
     const d = new Date(p.timestamp)
     return {
       time: d.getTime(),
-      label: d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+      label: d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }),
       power_w: p.power_w,
     }
   })
@@ -177,7 +177,7 @@ export default function CircuitDetail({ equipmentId, onBack }: Props) {
                   tickFormatter={(v) => {
                     const d = new Date(v)
                     if (period <= 3) {
-                      return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+                      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })
                     }
                     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
                   }}

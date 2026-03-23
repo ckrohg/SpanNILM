@@ -26,7 +26,8 @@ logger = logging.getLogger("span_nilm.api.circuit_detail")
 router = APIRouter(prefix="/api")
 
 DEFAULT_ELECTRICITY_RATE = 0.14
-EASTERN_OFFSET = timedelta(hours=-4)
+# Import shared Eastern offset
+from api.routers.dashboard import EASTERN_OFFSET
 
 
 def _get_spannilm_db():

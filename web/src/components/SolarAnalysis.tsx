@@ -93,7 +93,7 @@ export default function SolarAnalysis({ data }: Props) {
   let totalBuckets = 0
 
   for (const bucket of timeline) {
-    const hour = new Date(bucket.timestamp).getHours()
+    const hour = new Date(new Date(bucket.timestamp).toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours()
     totalW += bucket.total_w
     totalBuckets++
     if (hour >= SOLAR_START_HOUR && hour < SOLAR_END_HOUR) {

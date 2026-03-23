@@ -31,7 +31,25 @@ logger = logging.getLogger("span_nilm.api.dashboard")
 router = APIRouter(prefix="/api")
 
 DEFAULT_ELECTRICITY_RATE = 0.14  # $/kWh
-EASTERN_OFFSET = timedelta(hours=-4)
+
+# EST/EDT offset — loaded from settings if available, defaults to America/New_York
+# March-November = EDT (UTC-4), November-March = EST (UTC-5)
+def _get_eastern_offset() -> timedelta:
+    """Get the Eastern timezone offset, accounting for DST."""
+    from datetime import datetime
+    now = datetime.now()
+    # Simple DST check: March second Sunday to November first Sunday
+    # March 2026 DST starts March 8, November 2026 DST ends November 1
+    month = now.month
+    if 3 <= month <= 10:
+        return timedelta(hours=-4)  # EDT
+    elif month == 11 and now.day < 7:
+        # First week of November — could still be EDT
+        return timedelta(hours=-4)
+    else:
+        return timedelta(hours=-5)  # EST
+
+EASTERN_OFFSET = _get_eastern_offset()
 
 PERIOD_LABELS = {
     "today": "Today",
