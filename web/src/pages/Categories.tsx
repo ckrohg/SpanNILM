@@ -97,7 +97,7 @@ interface Props {
 
 function EnergyBar({ pct, color }: { pct: number; color: string }) {
   return (
-    <div className="w-full h-2 bg-gray-200 dark:bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+    <div className="w-full h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
       <div
         className="h-full rounded-full transition-all duration-500"
         style={{ width: `${Math.max(1, pct)}%`, backgroundColor: color }}
@@ -214,7 +214,7 @@ function CategoryCard({ data, totalEnergyMonth }: { data: CategoryData; totalEne
       {/* Expand indicator */}
       <div className="flex justify-center pb-1.5">
         <svg
-          className={`w-4 h-4 text-gray-600 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 text-gray-400 dark:text-gray-600 transition-transform ${expanded ? 'rotate-180' : ''}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -251,8 +251,8 @@ function CategoryTimelineTooltip({
   const total = items.reduce((sum, p) => sum + p.value, 0)
 
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-xl text-xs max-w-[260px]">
-      <div className="text-gray-400 mb-1.5 font-medium">{label}</div>
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 shadow-xl text-xs max-w-[260px]">
+      <div className="text-gray-600 dark:text-gray-400 mb-1.5 font-medium">{label}</div>
       <div className="space-y-0.5">
         {items.map((item) => (
           <div key={item.dataKey} className="flex items-center justify-between gap-4">
@@ -261,17 +261,17 @@ function CategoryTimelineTooltip({
                 className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
                 style={{ backgroundColor: item.color }}
               />
-              <span className="text-gray-300 truncate">{item.name}</span>
+              <span className="text-gray-700 dark:text-gray-300 truncate">{item.name}</span>
             </div>
-            <span className="text-white font-mono tabular-nums flex-shrink-0">
+            <span className="text-gray-900 dark:text-white font-mono tabular-nums flex-shrink-0">
               {formatPower(item.value)}
             </span>
           </div>
         ))}
       </div>
-      <div className="border-t border-gray-700 mt-1.5 pt-1.5 flex justify-between">
-        <span className="text-gray-400">Total</span>
-        <span className="text-white font-mono font-bold">{formatPower(total)}</span>
+      <div className="border-t border-gray-200 dark:border-gray-700 mt-1.5 pt-1.5 flex justify-between">
+        <span className="text-gray-600 dark:text-gray-400">Total</span>
+        <span className="text-gray-900 dark:text-white font-mono font-bold">{formatPower(total)}</span>
       </div>
     </div>
   )
@@ -283,6 +283,10 @@ function CategoryTimeline({ timeline }: { timeline: TimelineBucket[] }) {
   const { chartData, categories, colorMap } = useMemo(() => {
     // For each timeline bucket, sum circuit power by category
     const catsPresent = new Set<Category>()
+    const catReadings: Record<Category, number[]> = {
+      'HVAC': [], 'EV Charging': [], 'Kitchen': [], 'Laundry': [],
+      'Water': [], 'Lighting & Outlets': [], 'Other': [],
+    }
 
     const data = timeline.map((bucket) => {
       const point: Record<string, number | string> = {
@@ -303,13 +307,32 @@ function CategoryTimeline({ timeline }: { timeline: TimelineBucket[] }) {
       for (const cat of CATEGORY_ORDER) {
         const val = Math.max(0, Math.round(catSums[cat]))
         point[cat] = val
+        catReadings[cat].push(val)
         if (val > 0) catsPresent.add(cat)
       }
 
       return point
     })
 
+    // Sort by coefficient of variation (std/mean) — stable categories at bottom, spiky at top
     const activeCats = CATEGORY_ORDER.filter((c) => catsPresent.has(c))
+    const catCV: Record<string, number> = {}
+    const catTotal: Record<string, number> = {}
+    for (const cat of activeCats) {
+      const readings = catReadings[cat]
+      const mean = readings.reduce((s, v) => s + v, 0) / readings.length
+      const variance = readings.reduce((s, v) => s + (v - mean) ** 2, 0) / readings.length
+      const std = Math.sqrt(variance)
+      catCV[cat] = mean > 0 ? std / mean : 0
+      catTotal[cat] = readings.reduce((s, v) => s + v, 0)
+    }
+    activeCats.sort((a, b) => {
+      const cvA = catCV[a] || 0
+      const cvB = catCV[b] || 0
+      if (Math.abs(cvA - cvB) > 0.3) return cvA - cvB
+      return (catTotal[b] || 0) - (catTotal[a] || 0)
+    })
+
     const colors: Record<string, string> = {}
     for (const cat of activeCats) {
       colors[cat] = CATEGORY_META[cat].color
@@ -365,7 +388,7 @@ function CategoryTimeline({ timeline }: { timeline: TimelineBucket[] }) {
               iconType="square"
               iconSize={8}
               formatter={(value: string) => (
-                <span className="text-gray-400 text-[10px]">{value}</span>
+                <span className="text-gray-600 dark:text-gray-400 text-[10px]">{value}</span>
               )}
             />
             {categories.map((cat) => (
@@ -812,7 +835,7 @@ export default function Categories({ data, dateRange = 'today', onDateRangeChang
       {/* Category Timeline */}
       <section>
         <h2 className="text-sm font-medium text-gray-400 mb-2">
-          Power Timeline by Category
+          Power Timeline by Category — {PERIOD_LABELS[dateRange]}
         </h2>
         <CategoryTimeline timeline={data.timeline} />
       </section>
@@ -826,7 +849,7 @@ export default function Categories({ data, dateRange = 'today', onDateRangeChang
       {/* Energy Summary by Category */}
       <section>
         <h2 className="text-sm font-medium text-gray-400 mb-2">
-          Energy Summary
+          Energy Summary — {PERIOD_LABELS[dateRange]}
         </h2>
         <CategoryEnergySummary categoryData={categoryData} />
       </section>
